@@ -1,0 +1,8 @@
+{
+    "name": "esse-mumble",
+    "version": "1.0.0",
+    "description": "Mumble-Server Verwaltung für esse-cms",
+    "author": "Andreas P.",
+    "class": "EsseMumble\\Plugin",
+    "requires": { "esse": ">=0.1.0" }
+}
