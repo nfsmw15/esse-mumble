@@ -1393,7 +1393,8 @@ class MumbleRepository
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
         if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
         $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token']);
-        return $agent->getChannels((string)$srv['container_id']);
+        $res   = $agent->getChannels((string)$srv['container_id']);
+        return $res['ok'] && is_array($res['data']) ? $res['data'] : ['ok' => false, 'error' => $res['error'] ?? 'Fehler'];
     }
 
     public function addMumbleChannel(int $serverId, string $name, int $parent = 0): array
@@ -1440,7 +1441,8 @@ class MumbleRepository
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
         if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
         $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token']);
-        return $agent->getBans((string)$srv['container_id']);
+        $res   = $agent->getBans((string)$srv['container_id']);
+        return $res['ok'] && is_array($res['data']) ? $res['data'] : ['ok' => false, 'error' => $res['error'] ?? 'Fehler'];
     }
 
     public function setMumbleBans(int $serverId, array $bans): array
@@ -1463,7 +1465,8 @@ class MumbleRepository
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
         if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
         $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token']);
-        return $agent->getChannelAcl((string)$srv['container_id'], $channelId);
+        $res   = $agent->getChannelAcl((string)$srv['container_id'], $channelId);
+        return $res['ok'] && is_array($res['data']) ? $res['data'] : ['ok' => false, 'error' => $res['error'] ?? 'Fehler'];
     }
 
     public function setChannelAcl(int $serverId, int $channelId, bool $inheritAcl, array $aclEntries, array $groups): array
