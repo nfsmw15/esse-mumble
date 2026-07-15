@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+/*
+ * Verwaltet ausschliesslich die Host-Admin-Delegation (mumble_host_admin +
+ * Host-Zuweisung). Die uebrigen Mumble-Rechte (mumble_admin, mumble_hosts,
+ * mumble_quota, mumble_view) sind einfache rollenbasierte Rechte ohne
+ * Zusatzdaten und werden bewusst nur ueber die zentrale esse-cms-Seite
+ * /admin/roles vergeben, um nicht zwei Oberflaechen fuer dasselbe Recht zu
+ * haben.
+ */
+
 use Esse\Auth;
 use Esse\DB;
 
@@ -8,10 +17,7 @@ if (!Auth::meetsRole('admin') && !Auth::can('mumble_admin')) {
     http_response_code(403); echo '403 Forbidden'; exit;
 }
 
-$mumble = new \EsseMumble\MumbleRepository();
-
 $tu  = DB::table('users');
-$tup = DB::table('user_permissions');
 $tha = DB::table('mumble_host_admin');
 $th  = DB::table('mumble_host');
 
@@ -26,33 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!Auth::verifyCsrf()) { http_response_code(403); exit; }
 
     $action = $_POST['_action'] ?? '';
-
-    // AJAX: toggle a single mumble_* permission for a user
-    if ($action === 'toggle_perm') {
-        header('Content-Type: application/json');
-        $userId   = (int)($_POST['user_id']    ?? 0);
-        $permSlug = preg_replace('/[^a-z_]/', '', $_POST['perm'] ?? '');
-        $allowed  = ['mumble_admin', 'mumble_hosts', 'mumble_quota', 'mumble_host_admin'];
-
-        if (!$userId || !in_array($permSlug, $allowed, true)) {
-            echo json_encode(['error' => 'invalid']); exit;
-        }
-
-        $current = DB::fetch(
-            "SELECT granted FROM `{$tup}` WHERE user_id = ? AND permission_slug = ?",
-            [$userId, $permSlug]
-        );
-        $nowGranted = !($current && (bool)$current['granted']);
-
-        \EsseMumble\MumbleRepository::setUserPermission($userId, $permSlug, $nowGranted);
-
-        // If revoking mumble_host_admin, clean up host assignments too
-        if ($permSlug === 'mumble_host_admin' && !$nowGranted) {
-            DB::query("DELETE FROM `{$tha}` WHERE user_id = ?", [$userId]);
-        }
-
-        echo json_encode(['granted' => $nowGranted]); exit;
-    }
 
     // AJAX: assign a user as host admin for a specific host
     if ($action === 'add_host_admin') {
@@ -95,27 +74,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // -- GET: load data --
-$usersWithPerms = \EsseMumble\MumbleRepository::getUsersWithMumblePerms();
-$hostAdminMap   = \EsseMumble\MumbleRepository::getHostAdminMap();
-$hosts          = DB::fetchAll("SELECT id, name FROM `{$th}` ORDER BY name ASC", []) ?: [];
-
-$mumblePermLabels = [
-    'mumble_admin'      => 'Alles verwalten',
-    'mumble_hosts'      => 'Hosts verwalten',
-    'mumble_quota'      => 'Quotas verwalten',
-    'mumble_host_admin' => 'Host-Admin',
-];
+$hostAdminMap = \EsseMumble\MumbleRepository::getHostAdminMap();
+$hosts        = DB::fetchAll("SELECT id, name FROM `{$th}` ORDER BY name ASC", []) ?: [];
 
 $csrf = Auth::csrfToken();
 
-$pageTitle = 'Mumble Rechte';
+$pageTitle = 'Mumble Host-Admins';
 $activeNav = 'mumble-permissions';
 
 ob_start();
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0"><i class="bi bi-headphones"></i> Mumble Rechte</h4>
+    <h4 class="mb-0"><i class="bi bi-headphones"></i> Mumble Host-Admins</h4>
 </div>
+
+<p class="text-secondary small">
+    Hier werden Nutzer als delegierte Verwalter (<code>mumble_host_admin</code>) einzelnen
+    Mumble-Hosts zugeordnet. Die allgemeinen Mumble-Rechte
+    (<em>Fremdserver verwalten</em>, <em>Hosts verwalten</em>, <em>Quotas verwalten</em>)
+    werden rollenbasiert unter <a href="/admin/roles">Rollen &amp; Rechte</a> vergeben.
+</p>
 
 <?php if ($flash): ?>
 <div class="alert alert-<?= htmlspecialchars($flash['type']) ?> alert-dismissible" role="alert">
@@ -126,82 +104,8 @@ ob_start();
 
 <div class="row g-4">
 
-    <!-- Benutzerrechte -->
-    <div class="col-lg-7">
-        <div class="card">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <strong><i class="bi bi-person-lock"></i> Benutzerrechte</strong>
-                <button class="btn btn-sm btn-outline-primary" id="btn-add-perm">
-                    <i class="bi bi-plus-lg"></i> Recht vergeben
-                </button>
-            </div>
-            <div id="add-perm-form" class="card-body border-bottom pb-3" style="display:none">
-                <div class="row g-2 align-items-end">
-                    <div class="col-sm-5">
-                        <label class="form-label small mb-1">Benutzer suchen</label>
-                        <input type="text" id="perm-user-search" class="form-control form-control-sm"
-                               placeholder="Username oder E-Mail…" autocomplete="off">
-                        <div id="perm-user-results" class="list-group mt-1" style="display:none"></div>
-                    </div>
-                    <div class="col-sm-4">
-                        <label class="form-label small mb-1">Recht</label>
-                        <select id="perm-select" class="form-select form-select-sm">
-                            <?php foreach ($mumblePermLabels as $slug => $label): ?>
-                            <option value="<?= $slug ?>"><?= htmlspecialchars($label) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-sm-3">
-                        <button id="btn-grant-perm" class="btn btn-sm btn-primary w-100" disabled>
-                            <i class="bi bi-check-lg"></i> Vergeben
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <?php if (empty($usersWithPerms)): ?>
-            <div class="card-body text-muted small">Noch keine Mumble-Rechte vergeben.</div>
-            <?php else: ?>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Benutzer</th>
-                            <th class="text-center" title="Alles verwalten">Admin</th>
-                            <th class="text-center" title="Hosts verwalten">Hosts</th>
-                            <th class="text-center" title="Quotas verwalten">Quota</th>
-                            <th class="text-center" title="Host-Admin">H-Adm</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php foreach ($usersWithPerms as $u): ?>
-                    <tr data-uid="<?= (int)$u['id'] ?>">
-                        <td>
-                            <div><?= htmlspecialchars((string)$u['display_name']) ?></div>
-                            <small class="text-muted"><?= htmlspecialchars((string)$u['role']) ?></small>
-                        </td>
-                        <?php foreach (array_keys($mumblePermLabels) as $perm): ?>
-                        <td class="text-center">
-                            <button type="button"
-                                class="btn btn-sm perm-toggle <?= $u[$perm] ? 'btn-success' : 'btn-outline-secondary' ?>"
-                                data-uid="<?= (int)$u['id'] ?>"
-                                data-perm="<?= $perm ?>"
-                                title="<?= htmlspecialchars($mumblePermLabels[$perm]) ?>">
-                                <i class="bi bi-<?= $u[$perm] ? 'check-lg' : 'dash' ?>"></i>
-                            </button>
-                        </td>
-                        <?php endforeach; ?>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
     <!-- Host-Admin Zuweisungen -->
-    <div class="col-lg-5">
+    <div class="col-lg-7">
         <div class="card">
             <div class="card-header py-2">
                 <strong><i class="bi bi-server"></i> Host-Admin Zuweisungen</strong>
@@ -272,90 +176,6 @@ $extraScripts = '<script>
 const CSRF = ' . json_encode($csrf) . ';
 const API  = "/admin/mumble-permissions";
 
-// -- Permission toggle --
-document.querySelectorAll(".perm-toggle").forEach(btn => {
-    btn.addEventListener("click", async () => {
-        const uid  = btn.dataset.uid;
-        const perm = btn.dataset.perm;
-        const fd   = new FormData();
-        fd.append("_action", "toggle_perm");
-        fd.append("user_id", uid);
-        fd.append("perm",    perm);
-        fd.append("_csrf",   CSRF);
-
-        const r   = await fetch(API, { method: "POST", body: fd });
-        const res = await r.json();
-        if (res.granted) {
-            btn.classList.replace("btn-outline-secondary", "btn-success");
-            btn.innerHTML = "<i class=\"bi bi-check-lg\"></i>";
-        } else {
-            btn.classList.replace("btn-success", "btn-outline-secondary");
-            btn.innerHTML = "<i class=\"bi bi-dash\"></i>";
-            if (perm === "mumble_host_admin") {
-                document.querySelectorAll(".btn-remove-host-admin[data-uid=\"" + uid + "\"]").forEach(x => {
-                    x.closest(".badge")?.remove();
-                });
-                document.querySelectorAll("#host-admin-list .ha-badge-list").forEach(list => {
-                    if (!list.querySelector(".badge")) {
-                        list.innerHTML = "<span class=\"text-muted small ha-empty\">Kein Host-Admin</span>";
-                    }
-                });
-            }
-        }
-    });
-});
-
-// -- Add-perm panel toggle --
-document.getElementById("btn-add-perm").addEventListener("click", () => {
-    const f = document.getElementById("add-perm-form");
-    f.style.display = f.style.display === "none" ? "" : "none";
-});
-
-// -- User search for permission grant --
-let permSelectedUser = null;
-const permSearch  = document.getElementById("perm-user-search");
-const permResults = document.getElementById("perm-user-results");
-const btnGrant    = document.getElementById("btn-grant-perm");
-
-permSearch.addEventListener("input", async () => {
-    permSelectedUser = null;
-    btnGrant.disabled = true;
-    const q = permSearch.value.trim();
-    if (q.length < 2) { permResults.style.display = "none"; return; }
-    const r   = await fetch("/mumble/api/user-search?q=" + encodeURIComponent(q) + "&limit=8");
-    const res = await r.json();
-    permResults.innerHTML = "";
-    if (!res.length) { permResults.style.display = "none"; return; }
-    res.forEach(u => {
-        const a = document.createElement("button");
-        a.type = "button";
-        a.className = "list-group-item list-group-item-action list-group-item-dark py-1 small";
-        a.textContent = u.display_name;
-        a.addEventListener("click", () => {
-            permSelectedUser = u;
-            permSearch.value = u.display_name;
-            permResults.style.display = "none";
-            btnGrant.disabled = false;
-        });
-        permResults.appendChild(a);
-    });
-    permResults.style.display = "";
-});
-
-document.getElementById("btn-grant-perm").addEventListener("click", async () => {
-    if (!permSelectedUser) return;
-    const perm = document.getElementById("perm-select").value;
-    const fd   = new FormData();
-    fd.append("_action", "toggle_perm");
-    fd.append("user_id", permSelectedUser.id);
-    fd.append("perm",    perm);
-    fd.append("_csrf",   CSRF);
-
-    const r   = await fetch(API, { method: "POST", body: fd });
-    const res = await r.json();
-    if (res.granted) { location.reload(); }
-});
-
 // -- Host-Admin modal --
 let haHostId  = null;
 let bsModal   = null;
@@ -407,11 +227,6 @@ haSearch.addEventListener("input", async () => {
                     badge.querySelector(".btn-remove-host-admin").addEventListener("click", removeHostAdmin);
                     badgeList.appendChild(badge);
                 }
-                const toggleBtn = document.querySelector(".perm-toggle[data-uid=\"" + u.id + "\"][data-perm=\"mumble_host_admin\"]");
-                if (toggleBtn) {
-                    toggleBtn.classList.replace("btn-outline-secondary", "btn-success");
-                    toggleBtn.innerHTML = "<i class=\"bi bi-check-lg\"></i>";
-                }
             }
         });
         haResults.appendChild(a);
@@ -440,14 +255,6 @@ async function removeHostAdmin(e) {
         badge?.remove();
         if (list && !list.querySelector(".badge")) {
             list.innerHTML = "<span class=\"text-muted small ha-empty\">Kein Host-Admin</span>";
-        }
-        const hostCount = document.querySelectorAll(".btn-remove-host-admin[data-uid=\"" + uid + "\"]").length;
-        if (hostCount === 0) {
-            const toggleBtn = document.querySelector(".perm-toggle[data-uid=\"" + uid + "\"][data-perm=\"mumble_host_admin\"]");
-            if (toggleBtn) {
-                toggleBtn.classList.replace("btn-success", "btn-outline-secondary");
-                toggleBtn.innerHTML = "<i class=\"bi bi-dash\"></i>";
-            }
         }
     }
 }

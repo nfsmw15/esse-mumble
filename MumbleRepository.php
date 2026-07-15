@@ -197,40 +197,6 @@ class MumbleRepository
         }
     }
 
-    public static function getUsersWithMumblePerms(): array
-    {
-        $tu  = DB::table('users');
-        $tup = DB::table('user_permissions');
-        $tha = DB::table('mumble_host_admin');
-
-        $mumblePerms = ['mumble_admin', 'mumble_hosts', 'mumble_quota', 'mumble_host_admin'];
-        $caseBlocks  = array_map(
-            fn($p) => "MAX(CASE WHEN up.permission_slug = '{$p}' AND up.granted = 1 THEN 1 ELSE 0 END) AS `{$p}`",
-            $mumblePerms
-        );
-
-        $rows = DB::fetchAll(
-            "SELECT u.id, u.display_name, u.email, u.role, " . implode(', ', $caseBlocks) . "
-               FROM `{$tu}` u
-               JOIN `{$tup}` up ON up.user_id = u.id
-              WHERE u.active = 1 AND up.permission_slug LIKE 'mumble_%' AND up.granted = 1
-              GROUP BY u.id
-              ORDER BY u.display_name ASC",
-            []
-        ) ?: [];
-
-        $hostMap = [];
-        foreach (DB::fetchAll("SELECT user_id, host_id FROM `{$tha}` ORDER BY user_id", []) ?: [] as $r) {
-            $hostMap[(int)$r['user_id']][] = (int)$r['host_id'];
-        }
-        foreach ($rows as &$row) {
-            $row['host_ids'] = $hostMap[(int)$row['id']] ?? [];
-        }
-        unset($row);
-
-        return $rows;
-    }
-
     public static function getHostAdminMap(): array
     {
         $tha = DB::table('mumble_host_admin');
@@ -1062,6 +1028,10 @@ class MumbleRepository
         $hosts  = $this->listHosts(false);
         $result = [];
 
+        // Live-Dashboard-Requests fuer alle laufenden Server parallel vorbereiten
+        $multiReqs = [];
+        $srvIndex  = [];
+
         foreach ($hosts as $host) {
             $hid = (int)$host['id'];
             if (!$isAdmin && !in_array($hid, $adminHosts)) continue;
@@ -1072,6 +1042,19 @@ class MumbleRepository
                 $users += (int)$srv['stats_online'];
             }
             unset($srv);
+
+            $hi = count($result);
+            foreach ($servers as $si => $srv) {
+                if ($srv['status'] !== 'running' || empty($srv['container_id'])) continue;
+                $key = $hi.'_'.$si;
+                $multiReqs[$key] = [
+                    'url'   => (string)$host['agent_url'],
+                    'token' => (string)$host['agent_token'],
+                    'cid'   => (string)$srv['container_id'],
+                ];
+                $srvIndex[$key] = [$hi, $si];
+            }
+
             unset($host['agent_token']);
             $result[] = [
                 'host'         => $host,
@@ -1081,6 +1064,28 @@ class MumbleRepository
                 'users_total'  => $users,
             ];
         }
+
+        // Alle Agent-Requests gleichzeitig abfeuern und Live-Daten je Server einmischen
+        if (!empty($multiReqs)) {
+            $dashResults = MumbleAgent::multiDashboard($multiReqs);
+            foreach ($dashResults as $key => $dash) {
+                [$hi, $si] = $srvIndex[$key];
+                $resp = $dash['data'] ?? [];
+                $data = (($resp['ok'] ?? false) && isset($resp['data'])) ? $resp['data'] : [];
+                $result[$hi]['servers'][$si]['users']           = $data['users'] ?? [];
+                $result[$hi]['servers'][$si]['user_count']      = $data['user_count'] ?? 0;
+                $result[$hi]['servers'][$si]['bandwidth_total'] = array_sum(array_column($data['users'] ?? [], 'bytespersec'));
+                $result[$hi]['servers'][$si]['uptime_secs']     = $data['uptime_secs'] ?? 0;
+                $result[$hi]['servers'][$si]['cpu_percent']     = $data['cpu_percent'] ?? 0;
+                $result[$hi]['servers'][$si]['mem_mb']          = $data['mem_mb'] ?? 0;
+                $result[$hi]['servers'][$si]['channel_count']   = $data['channel_count'] ?? 0;
+            }
+            foreach ($result as &$hostData) {
+                $hostData['users_total'] = array_sum(array_column($hostData['servers'], 'user_count'));
+            }
+            unset($hostData);
+        }
+
         return ['ok' => true, 'hosts' => $result, 'is_admin' => $isAdmin, 'is_host_admin' => $isHostAdm];
     }
 

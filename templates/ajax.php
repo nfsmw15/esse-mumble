@@ -80,11 +80,19 @@ if ($action === 'dashboard_data') {
 }
 
 if ($action === 'dashboard_history') {
-    if (!$mumble->canAdminAll() && !$mumble->isHostAdmin()) {
+    if (!$mumble->canView()) {
         mbJson(['ok' => false, 'error' => 'Keine Berechtigung']);
     }
     $range = (string)($_GET['range'] ?? '24h');
-    $data  = $mumble->getStatsHistoryAll($range);
+    if ($mumble->canAdminAll()) {
+        $data = $mumble->getStatsHistoryAll($range);
+    } elseif ($mumble->isHostAdmin()) {
+        $ids  = array_column($mumble->listServersByHostAdmin((int)Auth::id()), 'id');
+        $data = empty($ids) ? [] : $mumble->getStatsHistoryAll($range, $ids);
+    } else {
+        $ids  = array_column($mumble->listServersByOwner((int)Auth::id()), 'id');
+        $data = empty($ids) ? [] : $mumble->getStatsHistoryAll($range, $ids);
+    }
     mbJson(['ok' => true, 'data' => $data]);
 }
 

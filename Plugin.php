@@ -24,7 +24,7 @@ class Plugin extends \Esse\Plugin
         MumbleRepository::migrate();
         MumbleRepository::registerPermissions();
 
-        $this->addAdminNav('Mumble Rechte', '/admin/mumble-permissions', 'headphones', 'admin/mumble-permissions');
+        $this->addAdminNav('Mumble Host-Admins', '/admin/mumble-permissions', 'headphones', 'admin/mumble-permissions');
 
         $this->registerPage('/mumble/servers',    'Mumble: Server',           'headphones', 'member');
         $this->registerPage('/mumble/new',        'Mumble: Neuer Server',     'headphones', 'admin|mumble_host_admin');
