@@ -169,11 +169,8 @@ ob_start();
     </div>
 </div>
 
-<?php
-$content = ob_get_clean();
-
-$extraScripts = '<script>
-const CSRF = ' . json_encode($csrf) . ';
+<script>
+const CSRF = <?= json_encode($csrf) ?>;
 const API  = "/admin/mumble-permissions";
 
 // -- Host-Admin modal --
@@ -223,7 +220,7 @@ haSearch.addEventListener("input", async () => {
                     const badge = document.createElement("span");
                     badge.className = "badge bg-secondary d-flex align-items-center gap-1";
                     badge.dataset.uid = u.id;
-                    badge.innerHTML = escHtml(res2.display_name) + "<button type=\"button\" class=\"btn-close btn-close-white btn-remove-host-admin\" style=\"font-size:.5rem\" data-hid=\"" + haHostId + "\" data-uid=\"" + u.id + "\"></button>";
+                    badge.innerHTML = escHtml(res2.display_name) + '<button type="button" class="btn-close btn-close-white btn-remove-host-admin" style="font-size:.5rem" data-hid="' + haHostId + '" data-uid="' + u.id + '"></button>';
                     badge.querySelector(".btn-remove-host-admin").addEventListener("click", removeHostAdmin);
                     badgeList.appendChild(badge);
                 }
@@ -254,7 +251,7 @@ async function removeHostAdmin(e) {
         const list  = badge?.parentElement;
         badge?.remove();
         if (list && !list.querySelector(".badge")) {
-            list.innerHTML = "<span class=\"text-muted small ha-empty\">Kein Host-Admin</span>";
+            list.innerHTML = '<span class="text-muted small ha-empty">Kein Host-Admin</span>';
         }
     }
 }
@@ -262,6 +259,9 @@ async function removeHostAdmin(e) {
 document.querySelectorAll(".btn-remove-host-admin").forEach(btn => {
     btn.addEventListener("click", removeHostAdmin);
 });
-</script>';
+</script>
+
+<?php
+$content = ob_get_clean();
 
 require ESSE_ROOT . '/admin/layout.php';
