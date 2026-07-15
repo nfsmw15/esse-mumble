@@ -84,7 +84,7 @@ $activeNav = 'mumble-permissions';
 
 ob_start();
 ?>
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4" id="mb-page-config" data-csrf="<?= htmlspecialchars($csrf) ?>">
     <h4 class="mb-0"><i class="bi bi-headphones"></i> Mumble Host-Admins</h4>
 </div>
 
@@ -169,97 +169,7 @@ ob_start();
     </div>
 </div>
 
-<script>
-const CSRF = <?= json_encode($csrf) ?>;
-const API  = "/admin/mumble-permissions";
-
-// -- Host-Admin modal --
-let haHostId  = null;
-let bsModal   = null;
-
-document.querySelectorAll(".btn-add-host-admin").forEach(btn => {
-    btn.addEventListener("click", () => {
-        haHostId = parseInt(btn.dataset.hid);
-        document.getElementById("modal-host-name").textContent = btn.dataset.hname;
-        document.getElementById("ha-user-search").value = "";
-        document.getElementById("ha-user-results").innerHTML = "";
-        if (!bsModal) bsModal = new bootstrap.Modal(document.getElementById("modalAddHostAdmin"));
-        bsModal.show();
-    });
-});
-
-const haSearch  = document.getElementById("ha-user-search");
-const haResults = document.getElementById("ha-user-results");
-
-haSearch.addEventListener("input", async () => {
-    const q = haSearch.value.trim();
-    if (q.length < 2) { haResults.innerHTML = ""; return; }
-    const r   = await fetch("/mumble/api/user-search?q=" + encodeURIComponent(q) + "&limit=8");
-    const res = await r.json();
-    haResults.innerHTML = "";
-    res.forEach(u => {
-        const a = document.createElement("button");
-        a.type = "button";
-        a.className = "list-group-item list-group-item-action list-group-item-dark py-1 small";
-        a.textContent = u.display_name;
-        a.addEventListener("click", async () => {
-            const fd = new FormData();
-            fd.append("_action", "add_host_admin");
-            fd.append("user_id", u.id);
-            fd.append("host_id", haHostId);
-            fd.append("_csrf",   CSRF);
-
-            const r2   = await fetch(API, { method: "POST", body: fd });
-            const res2 = await r2.json();
-            if (res2.ok) {
-                bsModal.hide();
-                const hostRow   = document.querySelector("#host-admin-list [data-hid=\"" + haHostId + "\"]");
-                const badgeList = hostRow?.querySelector(".ha-badge-list");
-                if (badgeList) {
-                    badgeList.querySelector(".ha-empty")?.remove();
-                    const badge = document.createElement("span");
-                    badge.className = "badge bg-secondary d-flex align-items-center gap-1";
-                    badge.dataset.uid = u.id;
-                    badge.innerHTML = escHtml(res2.display_name) + '<button type="button" class="btn-close btn-close-white btn-remove-host-admin" style="font-size:.5rem" data-hid="' + haHostId + '" data-uid="' + u.id + '"></button>';
-                    badge.querySelector(".btn-remove-host-admin").addEventListener("click", removeHostAdmin);
-                    badgeList.appendChild(badge);
-                }
-            }
-        });
-        haResults.appendChild(a);
-    });
-});
-
-function escHtml(s) {
-    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
-
-async function removeHostAdmin(e) {
-    const btn = e.currentTarget;
-    const uid = parseInt(btn.dataset.uid);
-    const hid = parseInt(btn.dataset.hid);
-    const fd  = new FormData();
-    fd.append("_action", "remove_host_admin");
-    fd.append("user_id", uid);
-    fd.append("host_id", hid);
-    fd.append("_csrf",   CSRF);
-
-    const r   = await fetch(API, { method: "POST", body: fd });
-    const res = await r.json();
-    if (res.ok) {
-        const badge = btn.closest(".badge");
-        const list  = badge?.parentElement;
-        badge?.remove();
-        if (list && !list.querySelector(".badge")) {
-            list.innerHTML = '<span class="text-muted small ha-empty">Kein Host-Admin</span>';
-        }
-    }
-}
-
-document.querySelectorAll(".btn-remove-host-admin").forEach(btn => {
-    btn.addEventListener("click", removeHostAdmin);
-});
-</script>
+<script src="/plugins/esse-mumble/assets/mumble-permissions.js"></script>
 
 <?php
 $content = ob_get_clean();

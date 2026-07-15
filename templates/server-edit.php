@@ -299,7 +299,7 @@ $mb_widget_iframe = $mb_widget_token !== ''
                 <?php if ($mb_can_upgrade): ?>
                 <hr>
                 <form method="post" action="/mumble/edit/<?= (int)$mb_srv['id'] ?>"
-                      onsubmit="return confirm('Container wird aktualisiert.\nKurze Downtime (~10–30 Sekunden). Fortfahren?');">
+                      data-confirm="Container wird aktualisiert.&#10;Kurze Downtime (~10–30 Sekunden). Fortfahren?">
                     <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                     <input type="hidden" name="_action" value="upgrade">
                     <button class="btn btn-outline-warning w-100 d-block mb-2"><i class="bi bi-arrow-up-circle"></i> Image aktualisieren</button>
@@ -446,6 +446,7 @@ $mb_widget_iframe = $mb_widget_token !== ''
     </p>
 </div>
 
+<script src="/plugins/esse-mumble/assets/mumble-confirm.js"></script>
 <script src="/plugins/esse-mumble/assets/chart.umd.min.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-edit.js"></script>
 <?php

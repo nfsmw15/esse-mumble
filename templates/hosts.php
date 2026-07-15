@@ -153,7 +153,7 @@ foreach ($mb_hosts as $h) {
                                 <td class="text-end text-nowrap">
                                     <?php if (!empty($ping['update_available']) && !empty($ping['latest_image'])): ?>
                                     <form method="post" action="/mumble/hosts" class="d-inline"
-                                          onsubmit="return confirm('Agent-Image aktualisieren?');">
+                                          data-confirm="Agent-Image aktualisieren?">
                                         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                                         <input type="hidden" name="_action" value="update_image">
                                         <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
@@ -166,7 +166,7 @@ foreach ($mb_hosts as $h) {
                                     </a>
                                     <?php if ($online === true && ($mb_canManage || in_array((int)$h['id'], $mb_adminHostIds))): ?>
                                     <form method="post" action="/mumble/hosts" class="d-inline"
-                                          onsubmit="return confirm('Bestehende Server importieren?');">
+                                          data-confirm="Bestehende Server importieren?">
                                         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                                         <input type="hidden" name="_action" value="import_servers">
                                         <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
@@ -178,7 +178,7 @@ foreach ($mb_hosts as $h) {
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                     <form method="post" action="/mumble/hosts" class="d-inline"
-                                          onsubmit="return confirm('Host &quot;<?= htmlspecialchars((string)$h['name'], ENT_QUOTES) ?>&quot; löschen?');">
+                                          data-confirm="Host &quot;<?= htmlspecialchars((string)$h['name'], ENT_QUOTES) ?>&quot; löschen?">
                                         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                                         <input type="hidden" name="_action" value="delete">
                                         <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
@@ -350,5 +350,6 @@ foreach ($mb_hosts as $h) {
     </div>
 </div>
 
+<script src="/plugins/esse-mumble/assets/mumble-confirm.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-hosts.js"></script>
 <?php
