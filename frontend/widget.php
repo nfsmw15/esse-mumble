@@ -33,9 +33,12 @@ if (!$srv) {
 }
 
 $refresh = (int)$srv['widget_refresh'];
-$agent   = new \EsseMumble\MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token']);
-$res     = $agent->getViewer((string)$srv['container_id']);
-$data    = ($res['ok'] && isset($res['data']['channels'])) ? $res['data'] : null;
+$data    = null;
+if ((int)($srv['host_is_active'] ?? 1) === 1) {
+    $agent = new \EsseMumble\MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token'], 6);
+    $res   = $agent->getViewer((string)$srv['container_id']);
+    $data  = ($res['ok'] && isset($res['data']['channels'])) ? $res['data'] : null;
+}
 if ($data && isset($data['channels'])) {
     $data['channels']['name'] = (string)$srv['name'];
 }

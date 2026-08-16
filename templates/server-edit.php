@@ -34,9 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash'] = ['type' => 'success', 'message' => 'Aktion '.$action.' ausgeführt.'];
                 break;
             case 'upgrade':
-                $res = $mumble->performUpgrade($mb_sid);
+                $mb_upgradeImage = trim((string)($_POST['image'] ?? ''));
+                $res = $mumble->performUpgrade($mb_sid, $mb_upgradeImage !== '' ? $mb_upgradeImage : null);
                 if (!$res['ok']) throw new \RuntimeException($res['error'] ?? 'Upgrade fehlgeschlagen');
                 $_SESSION['flash'] = ['type' => 'success', 'message' => 'Image aktualisiert.'];
+                break;
+            case 'reconcile':
+                $res = $mumble->reconcileContainerId($mb_sid);
+                if (!$res['ok']) throw new \RuntimeException($res['error'] ?? 'Synchronisierung fehlgeschlagen');
+                $_SESSION['flash'] = !empty($res['changed'])
+                    ? ['type' => 'success', 'message' => 'Container-ID war veraltet und wurde repariert.']
+                    : ['type' => 'success', 'message' => 'Container-ID war bereits korrekt.'];
                 break;
             case 'superuser_reset':
                 $newPw = trim((string)($_POST['new_supw'] ?? ''));
@@ -83,24 +91,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Location: /mumble/edit/'.$mb_sid); exit;
 }
 
-$mumble->refreshStats($mb_sid);
-$mb_srv  = $mumble->getServer($mb_sid);
 $mb_csrf = Auth::csrfToken();
 
-$mb_ping            = null;
-$mb_container_image = '';
-$mb_agent_image     = '';
-$mb_can_upgrade     = false;
-if (!empty($mb_srv['agent_url']) && !empty($mb_srv['agent_token'])) {
-    $mb_agent_tmp = new \EsseMumble\MumbleAgent((string)$mb_srv['agent_url'], (string)$mb_srv['agent_token'], 5);
-    $mb_ping_res  = $mb_agent_tmp->ping();
-    if ($mb_ping_res['ok'] ?? false) {
-        $mb_ping            = $mb_ping_res['data'];
-        $mb_container_image = (string)($mb_ping['mumble_image'] ?? '');
-        $mb_agent_image     = (string)($mb_ping['latest_image'] ?? '');
-        $mb_can_upgrade     = $mb_agent_image !== '' && $mb_container_image !== '' && $mb_agent_image !== $mb_container_image;
-    }
-}
+// Session-Lock vor den Live-Agent-Calls freigeben (erst NACH csrfToken(), das ggf.
+// noch in die Session schreibt), sonst blockiert ein hängender Host jeden weiteren
+// Request derselben Browser-Session (siehe ajax.php).
+if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+
+$mb_stats_res        = $mumble->refreshStats($mb_sid);
+$mb_srv              = $mumble->getServer($mb_sid);
+$mb_container_image  = (string)($mb_stats_res['data']['image'] ?? '');
+
+$mb_images       = ((int)($mb_srv['host_is_active'] ?? 1) === 1) ? $mumble->getAvailableImages((int)$mb_srv['host_id']) : ['ok' => false, 'images' => []];
+$mb_avail_images = $mb_images['ok'] ? $mb_images['images'] : [];
+$mb_can_upgrade  = !empty($mb_avail_images);
 
 $mb_uptime = static function(int $secs): string {
     if ($secs <= 0) return '–';
@@ -170,10 +174,13 @@ $mb_widget_iframe = $mb_widget_token !== ''
                         <tr><th>Container-ID</th><td><code class="small"><?= htmlspecialchars(substr((string)$mb_srv['container_id'], 0, 12)) ?></code></td></tr>
                         <?php endif; ?>
                         <?php if ($mb_container_image !== ''): ?>
-                        <tr><th>Image (läuft)</th><td><code class="small"><?= htmlspecialchars($mb_container_image) ?></code></td></tr>
-                        <?php endif; ?>
-                        <?php if ($mb_can_upgrade): ?>
-                        <tr><th>Image (neu)</th><td><code class="small text-success"><?= htmlspecialchars($mb_agent_image) ?></code></td></tr>
+                        <?php
+                        $mb_runningIsPre = false;
+                        foreach ($mb_avail_images as $mb_i) { if ($mb_i['image'] === $mb_container_image) { $mb_runningIsPre = $mb_i['prerelease']; break; } }
+                        ?>
+                        <tr><th>Image (läuft)</th><td><code class="small"><?= htmlspecialchars($mb_container_image) ?></code>
+                            <?php if ($mb_runningIsPre): ?> <span class="badge text-bg-warning" title="Pre-Release laut GitHub-Releases von mumble-voip/mumble"><i class="bi bi-exclamation-triangle"></i> Pre-Release</span><?php endif; ?>
+                        </td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -299,10 +306,38 @@ $mb_widget_iframe = $mb_widget_token !== ''
                 <?php if ($mb_can_upgrade): ?>
                 <hr>
                 <form method="post" action="/mumble/edit/<?= (int)$mb_srv['id'] ?>"
-                      data-confirm="Container wird aktualisiert.&#10;Kurze Downtime (~10–30 Sekunden). Fortfahren?">
+                      data-confirm="Container wird auf die gewählte Version neu erstellt.&#10;Kurze Downtime (~10–30 Sekunden).&#10;Achtung: Ein Downgrade auf eine ältere Version kann fehlschlagen oder nicht sinnvoll sein, wenn sich das Datenbankformat zwischenzeitlich geändert hat (z.B. 1.6.x → 1.5.x). Fortfahren?">
                     <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                     <input type="hidden" name="_action" value="upgrade">
-                    <button class="btn btn-outline-warning w-100 d-block mb-2"><i class="bi bi-arrow-up-circle"></i> Image aktualisieren</button>
+                    <label class="form-label small mb-1">Version</label>
+                    <select name="image" class="form-select form-select-sm mb-2">
+                        <?php foreach ($mb_avail_images as $mb_img): $img = $mb_img['image']; ?>
+                        <option value="<?= htmlspecialchars($img) ?>" <?= $img === $mb_container_image ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($img) ?><?= $img === $mb_container_image ? ' (läuft)' : '' ?><?= $mb_img['latest'] ? ' (neueste)' : '' ?><?= $mb_img['prerelease'] ? ' — ⚠ Pre-Release, nicht stabil' : '' ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="small text-muted mb-2">
+                        <i class="bi bi-exclamation-triangle"></i> Downgrades können am Datenbankformat scheitern
+                        (der Agent lehnt inkompatible Downgrades ab).
+                    </p>
+                    <button class="btn btn-outline-warning w-100 d-block mb-2"><i class="bi bi-arrow-up-circle"></i> Version installieren</button>
+                </form>
+                <?php elseif ((int)($mb_srv['host_is_active'] ?? 1) !== 1): ?>
+                <hr>
+                <p class="small text-muted mb-0"><i class="bi bi-info-circle"></i> Host ist deaktiviert — keine Versionsauswahl möglich.</p>
+                <?php else: ?>
+                <hr>
+                <p class="small text-muted mb-0"><i class="bi bi-info-circle"></i> Agent unterstützt noch keine Versionsauswahl (oder Host nicht erreichbar).</p>
+                <?php endif; ?>
+                <?php if ($mumble->canAdminAll() || $mumble->isHostAdmin()): ?>
+                <form method="post" action="/mumble/edit/<?= (int)$mb_srv['id'] ?>" class="mb-2"
+                      data-confirm="Container-ID mit dem Agent abgleichen? Sinnvoll, falls der Server nach einem Upgrade nicht mehr reagiert (z.B. weil die Antwort verlorenging).">
+                    <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
+                    <input type="hidden" name="_action" value="reconcile">
+                    <button class="btn btn-sm btn-outline-secondary w-100 d-block" title="Container-ID mit dem Agent abgleichen, falls der Server nach einem Upgrade klemmt">
+                        <i class="bi bi-arrow-repeat"></i> Server neu synchronisieren
+                    </button>
                 </form>
                 <?php endif; ?>
                 <?php if ($mumble->isOwner($mb_sid) || $mumble->canAdminAll()): ?>

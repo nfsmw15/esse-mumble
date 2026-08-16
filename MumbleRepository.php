@@ -139,6 +139,9 @@ class MumbleRepository
             UNIQUE KEY `uniq_host_user` (`host_id`, `user_id`),
             KEY `idx_user` (`user_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", []);
+
+        // Ziel-Image pro Server merken (zuletzt explizit gewählte Version)
+        DB::query("ALTER TABLE `{$ts}` ADD COLUMN IF NOT EXISTS `pinned_image` VARCHAR(128) DEFAULT NULL", []);
     }
 
     public static function registerPermissions(): void
@@ -543,7 +546,7 @@ class MumbleRepository
         $ts = DB::table('mumble_server');
         $th = DB::table('mumble_host');
         $row = DB::fetch(
-            "SELECT s.*, h.agent_url, h.agent_token, h.name AS host_name, h.hostname
+            "SELECT s.*, h.agent_url, h.agent_token, h.name AS host_name, h.hostname, h.is_active AS host_is_active
                FROM `{$ts}` s
                JOIN `{$th}` h ON h.id = s.host_id
               WHERE s.id = ? LIMIT 1",
@@ -712,6 +715,21 @@ class MumbleRepository
             'delete'  => $agent->deleteServer($cid),
         };
 
+        // Container-ID veraltet (z.B. nach einem Upgrade, dessen Antwort verlorenging)?
+        // Einmal reparieren und die Aktion mit der korrekten ID erneut versuchen.
+        if (!($res['ok'] ?? false) && (int)($res['http'] ?? 0) === 404) {
+            $fix = $this->reconcileContainerId($serverId);
+            if (($fix['ok'] ?? false) && !empty($fix['changed'])) {
+                $cid = (string)$fix['container_id'];
+                $res = match ($action) {
+                    'start'   => $agent->startServer($cid),
+                    'stop'    => $agent->stopServer($cid),
+                    'restart' => $agent->restartServer($cid),
+                    'delete'  => $agent->deleteServer($cid),
+                };
+            }
+        }
+
         if ($res['ok']) {
             match ($action) {
                 'start'   => $this->setStatus($serverId, 'running'),
@@ -727,25 +745,209 @@ class MumbleRepository
         return $res;
     }
 
-    public function performUpgrade(int $serverId): array
+    public function performUpgrade(int $serverId, ?string $image = null): array
     {
         $srv = $this->getServer($serverId);
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
         if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        if ((int)($srv['host_is_active'] ?? 1) !== 1) return ['ok' => false, 'error' => 'Host deaktiviert'];
+
+        if ($image !== null) {
+            $avail = $this->getAvailableImages((int)$srv['host_id']);
+            if (!$this->imageIsAvailable($avail, $image)) {
+                return ['ok' => false, 'error' => 'Ungültige Version ausgewählt'];
+            }
+        }
 
         try { DB::connection()->query('SELECT 1'); } catch (\PDOException $e) { DB::connect(); }
         $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token'], 300);
-        $res   = $agent->upgradeServer((string)$srv['container_id']);
+        $res   = $agent->upgradeServer((string)$srv['container_id'], $image);
+
+        // Container-ID war schon vor diesem Versuch veraltet (z.B. verlorene Antwort
+        // eines vorherigen Upgrades)? Einmal reparieren und erneut versuchen.
+        if (!($res['ok'] ?? false) && (int)($res['http'] ?? 0) === 404) {
+            $fix = $this->reconcileContainerId($serverId);
+            if (($fix['ok'] ?? false) && !empty($fix['changed'])) {
+                try { DB::connection()->query('SELECT 1'); } catch (\PDOException $e) { DB::connect(); }
+                $res = $agent->upgradeServer((string)$fix['container_id'], $image);
+            }
+        }
 
         if ($res['ok'] ?? false) {
-            $newCid = (string)($res['data']['container_id'] ?? $srv['container_id']);
+            $newCid   = (string)($res['data']['container_id'] ?? $srv['container_id']);
+            $newImage = (string)($res['data']['image'] ?? ($image ?? ''));
             try { DB::connection()->query('SELECT 1'); } catch (\PDOException $e) { DB::connect(); }
             $this->updateContainerId($serverId, $newCid);
+            if ($newImage !== '') $this->setPinnedImage($serverId, $newImage);
             $uid = (int)Auth::id();
             $this->log($serverId, $uid, 'upgrade',
-                'Image aktualisiert auf '.($res['data']['image'] ?? 'unbekannt'), true);
+                'Image aktualisiert auf '.($newImage !== '' ? $newImage : 'unbekannt'), true);
         }
         return $res;
+    }
+
+    private function setPinnedImage(int $serverId, string $image): void
+    {
+        $ts = DB::table('mumble_server');
+        DB::query("UPDATE `{$ts}` SET pinned_image = ? WHERE id = ?", [$image, $serverId]);
+    }
+
+    /**
+     * Repariert eine veraltete container_id: sucht auf dem Agent nach dem Container
+     * mit passendem external_id-Label (das ist bei Erstellung/Upgrade immer die
+     * Server-ID) und übernimmt dessen aktuelle container_id in die DB.
+     *
+     * Nötig, falls z.B. beim Upgrade die HTTP-Antwort verlorenging (Agent-Neustart
+     * mitten im Request) — der Container wurde auf dem Agent trotzdem neu erstellt,
+     * die DB kennt aber nur noch die alte, nicht mehr existierende ID. Ohne Reparatur
+     * würde jede weitere Aktion (Start/Stop/Löschen/Upgrade) auf diesen Server mit
+     * "container not found" ins Leere laufen.
+     */
+    public function reconcileContainerId(int $serverId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+
+        $agent = new MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token'], 15);
+        $res   = $agent->listServers();
+        if (!($res['ok'] ?? false)) return ['ok' => false, 'error' => $res['error'] ?? 'Agent nicht erreichbar'];
+
+        foreach ((array)($res['data']['servers'] ?? []) as $agentSrv) {
+            if ((int)($agentSrv['external_id'] ?? 0) !== $serverId) continue;
+            $newCid = (string)($agentSrv['container_id'] ?? '');
+            if ($newCid === '') break;
+            if ($newCid !== (string)$srv['container_id']) {
+                $this->updateContainerId($serverId, $newCid);
+                $this->log($serverId, (int)Auth::id(), 'reconcile',
+                    'container_id repariert auf '.substr($newCid, 0, 12), true);
+                return ['ok' => true, 'container_id' => $newCid, 'changed' => true];
+            }
+            return ['ok' => true, 'container_id' => $newCid, 'changed' => false];
+        }
+        return ['ok' => false, 'error' => 'Kein passender Container auf dem Agent gefunden (external_id='.$serverId.')'];
+    }
+
+    /**
+     * Verfügbare Mumble-Server-Images für den Agent eines Hosts abfragen.
+     * Liefert ['ok'=>false,'images'=>[]], wenn der Agent den Endpunkt (noch) nicht
+     * kennt oder der Host deaktiviert ist.
+     */
+    public function getAvailableImages(int $hostId): array
+    {
+        $host = $this->getHost($hostId);
+        if (!$host || (int)($host['is_active'] ?? 1) !== 1) return ['ok' => false, 'images' => [], 'current' => ''];
+        $agent = new MumbleAgent((string)$host['agent_url'], (string)$host['agent_token'], 6);
+        $res   = $agent->listImages();
+        if (!($res['ok'] ?? false)) return ['ok' => false, 'images' => [], 'current' => ''];
+
+        // Ältere Agents liefern "images" als flaches String-Array, neuere als Objekte
+        // mit zusätzlichem "prerelease"- und "latest"-Flag. Der stable-Kanal (Agent-
+        // Default) filtert Pre-Releases serverseitig bereits raus — "prerelease" bleibt
+        // hier trotzdem nützlich, falls der Host bewusst auf den prerelease-Kanal
+        // umgestellt wurde. Beides auf eine einheitliche Form bringen.
+        $images = [];
+        foreach ((array)($res['data']['images'] ?? []) as $entry) {
+            if (is_array($entry)) {
+                $img = (string)($entry['image'] ?? '');
+                if ($img === '') continue;
+                $images[] = [
+                    'image'      => $img,
+                    'prerelease' => (bool)($entry['prerelease'] ?? false),
+                    'latest'     => (bool)($entry['latest'] ?? false),
+                ];
+            } else {
+                $img = (string)$entry;
+                if ($img === '') continue;
+                $images[] = ['image' => $img, 'prerelease' => false, 'latest' => false];
+            }
+        }
+
+        return [
+            'ok'      => true,
+            'images'  => $images,
+            'current' => (string)($res['data']['current'] ?? ''),
+            'channel' => (string)($res['data']['channel'] ?? 'stable'),
+        ];
+    }
+
+    /**
+     * Update-Kanal des Agents umstellen (stable/prerelease). Löst auf dem Agent
+     * einen kurzen Selbstneustart aus (~3-4s) — bewusste, seltene Host-Einstellung,
+     * kein Live-Toggle pro Request.
+     */
+    public function setHostChannel(int $hostId, string $channel): array
+    {
+        if (!in_array($channel, ['stable', 'prerelease'], true)) {
+            return ['ok' => false, 'error' => 'Ungültiger Kanal'];
+        }
+        $allowed = $this->canManageHosts() ||
+                   ($this->isHostAdmin() && in_array($hostId, $this->getAdminHostIds()));
+        if (!$allowed) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+
+        $host = $this->getHost($hostId);
+        if (!$host) return ['ok' => false, 'error' => 'Host nicht gefunden'];
+
+        $agent = new MumbleAgent((string)$host['agent_url'], (string)$host['agent_token'], 10);
+        return $agent->setChannel($channel);
+    }
+
+    /**
+     * mumble-agent selbst aktualisieren (Self-Updater ab Agent v2.15.0). Betrifft
+     * nur den Python-Agent-Prozess, nie die laufenden Mumble-Server-Container —
+     * die laufen während des kurzen Agent-Neustarts (~3-4s) unbeeinflusst weiter.
+     * $version = null aktualisiert auf das neueste GitHub-Release.
+     */
+    public function updateHostAgent(int $hostId, ?string $version = null): array
+    {
+        $allowed = $this->canManageHosts() ||
+                   ($this->isHostAdmin() && in_array($hostId, $this->getAdminHostIds()));
+        if (!$allowed) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+
+        $host = $this->getHost($hostId);
+        if (!$host) return ['ok' => false, 'error' => 'Host nicht gefunden'];
+
+        $agent = new MumbleAgent((string)$host['agent_url'], (string)$host['agent_token'], 30);
+        return $agent->updateAgent($version);
+    }
+
+    /**
+     * Alle Server eines Hosts nacheinander auf dieselbe Version aktualisieren
+     * (z.B. bei einem kritischen Patch). Ein einzelner Fehlschlag bricht die
+     * übrigen Server nicht ab.
+     */
+    public function bulkUpgradeHost(int $hostId, string $image): array
+    {
+        $allowed = $this->canManageHosts() ||
+                   ($this->isHostAdmin() && in_array($hostId, $this->getAdminHostIds()));
+        if (!$allowed) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+
+        $avail = $this->getAvailableImages($hostId);
+        if (!($avail['ok'] ?? false) || !$this->imageIsAvailable($avail, $image)) {
+            return ['ok' => false, 'error' => 'Ungültige Version ausgewählt'];
+        }
+
+        set_time_limit(0);
+
+        $upgraded = 0; $failed = [];
+        foreach ($this->getServersForHost($hostId) as $srv) {
+            if (empty($srv['container_id'])) continue;
+            $res = $this->performUpgrade((int)$srv['id'], $image);
+            if ($res['ok'] ?? false) {
+                $upgraded++;
+            } else {
+                $failed[] = (string)$srv['name'].': '.(string)($res['error'] ?? 'Fehler');
+            }
+        }
+
+        return ['ok' => true, 'upgraded' => $upgraded, 'failed' => $failed];
+    }
+
+    private function imageIsAvailable(array $avail, string $image): bool
+    {
+        foreach ($avail['images'] ?? [] as $entry) {
+            if (($entry['image'] ?? '') === $image) return true;
+        }
+        return false;
     }
 
     private function deleteServerRow(int $serverId): void
@@ -759,8 +961,14 @@ class MumbleRepository
         $srv = $this->getServer($serverId);
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
         if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        if ((int)($srv['host_is_active'] ?? 1) !== 1) {
+            if ($srv['status'] === 'running') $this->setStatus($serverId, 'error');
+            return ['ok' => false, 'error' => 'Host deaktiviert'];
+        }
 
-        $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token']);
+        // Kurzer Timeout: läuft bei jedem Seitenaufruf, soll bei hängendem Host
+        // die Seite nicht lange blockieren (Default-Timeout wäre 30s).
+        $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token'], 6);
         $res   = $agent->getStats((string)$srv['container_id']);
 
         if ($res['ok'] && isset($res['data']['online'], $res['data']['uptime'])) {
@@ -768,6 +976,9 @@ class MumbleRepository
             if (in_array($srv['status'], ['creating', 'error'], true)) {
                 $this->setStatus($serverId, 'running');
             }
+        } elseif ($srv['status'] === 'running') {
+            // Host nicht erreichbar — Status widerspiegeln statt "running" stehen zu lassen.
+            $this->setStatus($serverId, 'error');
         }
         return $res;
     }
@@ -816,13 +1027,15 @@ class MumbleRepository
 
         // Alle Agent-Anfragen parallel abfeuern statt nacheinander — sonst läuft der
         // Cron-Aufruf bei vielen Servern in den Apache-Proxy-Timeout (504).
+        // Server auf deaktivierten Hosts werden gar nicht erst live abgefragt.
         $servers  = [];
         $requests = [];
         foreach ($rows as $row) {
             $fullSrv = $this->getServer((int)$row['id']);
             if (!$fullSrv || $fullSrv['status'] !== 'running') continue;
             $sid = (int)$fullSrv['id'];
-            $servers[$sid]  = $fullSrv;
+            $servers[$sid] = $fullSrv;
+            if ((int)($fullSrv['host_is_active'] ?? 1) !== 1) continue;
             $requests[$sid] = [
                 'url'   => $fullSrv['agent_url'],
                 'token' => $fullSrv['agent_token'],
@@ -832,11 +1045,17 @@ class MumbleRepository
 
         $results = $requests ? MumbleAgent::multiDashboard($requests, 20, true) : [];
 
-        foreach ($results as $sid => $dash) {
-            $fullSrv   = $servers[$sid];
+        foreach ($servers as $sid => $fullSrv) {
+            $dash      = $results[$sid] ?? null;
             $agentResp = $dash['data'] ?? [];
             $data      = (($agentResp['ok'] ?? false) && isset($agentResp['data'])) ? $agentResp['data'] : [];
-            if (empty($data)) continue;
+            if (empty($data)) {
+                // Host nicht erreichbar (oder deaktiviert) — Status widerspiegeln statt
+                // stillschweigend "running" stehen zu lassen (sonst zeigt die Serverliste
+                // dauerhaft einen falschen Zustand, wenn ein Host offline geht).
+                $this->setStatus($sid, 'error');
+                continue;
+            }
             $users   = $data['users'] ?? [];
             $pings   = array_filter(array_map(function($u) {
                 $p = ($u['udp_ping'] ?? 0) > 0 ? $u['udp_ping'] : ($u['tcp_ping'] ?? 0);
@@ -1046,6 +1265,10 @@ class MumbleRepository
             $hi = count($result);
             foreach ($servers as $si => $srv) {
                 if ($srv['status'] !== 'running' || empty($srv['container_id'])) continue;
+                // Inaktive Hosts werden weiterhin angezeigt (Server-/Nutzerzahlen aus der DB),
+                // aber nicht live gepollt — sonst hämmert das Dashboard bei jedem Poll-Zyklus
+                // gegen einen bewusst deaktivierten/nicht erreichbaren Host.
+                if ((int)($host['is_active'] ?? 1) !== 1) continue;
                 $key = $hi.'_'.$si;
                 $multiReqs[$key] = [
                     'url'   => (string)$host['agent_url'],
@@ -1091,16 +1314,44 @@ class MumbleRepository
 
     public function getLiveHostData(int $hostId): array
     {
+        $host    = $this->getHost($hostId);
+        $active  = $host && (int)($host['is_active'] ?? 1) === 1;
         $servers = $this->getServersForHost($hostId);
         $result  = ['users_total' => 0, 'running' => 0, 'stopped' => 0, 'bandwidth' => 0, 'cpu_avg' => 0, 'ram_total' => 0, 'ping_avg' => 0, 'servers' => []];
         $cpuVals = []; $pingVals = [];
+
+        // Alle laufenden Server parallel abfragen statt nacheinander — sonst kann ein
+        // einzelner hängender Server die ganze Host-Seite blockieren (bis zu N * Timeout).
+        // Deaktivierte Hosts werden gar nicht erst live gepollt.
+        $requests = [];
+        if ($active) {
+            foreach ($servers as $srv) {
+                if ($srv['status'] !== 'running') continue;
+                $fullSrv = $this->getServer((int)$srv['id']);
+                if (!$fullSrv) continue;
+                $requests[(int)$srv['id']] = [
+                    'url'   => $fullSrv['agent_url'],
+                    'token' => $fullSrv['agent_token'],
+                    'cid'   => (string)$fullSrv['container_id'],
+                ];
+            }
+        }
+
+        $results = $requests ? MumbleAgent::multiDashboard($requests, 8) : [];
+
         foreach ($servers as $srv) {
-            $fullSrv = $this->getServer((int)$srv['id']);
-            if (!$fullSrv) continue;
-            if ($srv['status'] !== 'running') { $result['stopped']++; $result['servers'][] = $srv; continue; }
+            $sid = (int)$srv['id'];
+            if ($srv['status'] !== 'running') {
+                $result['stopped']++;
+                $result['servers'][] = $srv;
+                continue;
+            }
             $result['running']++;
-            $agent = new MumbleAgent($fullSrv['agent_url'], $fullSrv['agent_token']);
-            $dash  = $agent->getDashboard((string)$fullSrv['container_id']);
+            if (!isset($requests[$sid])) {
+                $result['servers'][] = $srv;
+                continue;
+            }
+            $dash  = $results[$sid] ?? ['ok' => false, 'data' => null];
             $resp  = $dash['data'] ?? [];
             $data  = (($resp['ok'] ?? false) && isset($resp['data'])) ? $resp['data'] : [];
             $users = $data['users'] ?? [];
@@ -1351,7 +1602,8 @@ class MumbleRepository
         $srv = $this->getServer($serverId);
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
         if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
-        $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token']);
+        if ((int)($srv['host_is_active'] ?? 1) !== 1) return ['ok' => false, 'error' => 'Host deaktiviert'];
+        $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token'], 6);
         return $agent->getLiveUsers((string)$srv['container_id']);
     }
 
@@ -1492,7 +1744,8 @@ class MumbleRepository
     {
         $srv = $this->getServer($serverId);
         if (!$srv || !$this->canManageServer($serverId)) return null;
-        $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token']);
+        if ((int)($srv['host_is_active'] ?? 1) !== 1) return null;
+        $agent = new MumbleAgent($srv['agent_url'], $srv['agent_token'], 6);
         $res   = $agent->getViewer((string)$srv['container_id']);
         return $res['ok'] ? $res['data'] : null;
     }
@@ -1535,7 +1788,7 @@ class MumbleRepository
         $ts = DB::table('mumble_server');
         $th = DB::table('mumble_host');
         $row = DB::fetch(
-            "SELECT s.*, h.agent_url, h.agent_token, h.hostname
+            "SELECT s.*, h.agent_url, h.agent_token, h.hostname, h.is_active AS host_is_active
                FROM `{$ts}` s JOIN `{$th}` h ON h.id = s.host_id
               WHERE s.widget_token = ? AND s.status = 'running' LIMIT 1",
             [$token]
@@ -1548,7 +1801,7 @@ class MumbleRepository
         $ts = DB::table('mumble_server');
         $th = DB::table('mumble_host');
         $row = DB::fetch(
-            "SELECT s.*, h.agent_url, h.agent_token, h.hostname
+            "SELECT s.*, h.agent_url, h.agent_token, h.hostname, h.is_active AS host_is_active
                FROM `{$ts}` s JOIN `{$th}` h ON h.id = s.host_id
               WHERE s.id = ? AND s.widget_public = 1 AND s.status = 'running' LIMIT 1",
             [$id]

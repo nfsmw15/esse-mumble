@@ -32,10 +32,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash'] = ['type' => 'success', 'message' => 'Host gelöscht.'];
                 header('Location: /mumble/hosts'); exit;
             case 'update_image':
+                // Setzt nur das Default-Image für künftige Server-Neuanlagen ohne
+                // explizite Versionswahl. UI-Trigger nur noch als Fallback für alte
+                // Agents ohne GET /v1/images (siehe bulk_upgrade für den Regelfall).
                 $res = $mumble->updateHostImage((int)$_POST['id'], (string)$_POST['image']);
                 $_SESSION['flash'] = $res['ok']
                     ? ['type' => 'success', 'message' => 'Agent-Image wird aktualisiert.']
                     : ['type' => 'danger', 'message' => 'Fehler: '.($res['error'] ?? '')];
+                header('Location: /mumble/hosts'); exit;
+            case 'set_channel':
+                $res = $mumble->setHostChannel((int)$_POST['id'], (string)$_POST['channel']);
+                $_SESSION['flash'] = $res['ok']
+                    ? ['type' => 'success', 'message' => 'Update-Kanal wird umgestellt (Agent startet kurz neu).']
+                    : ['type' => 'danger', 'message' => 'Fehler: '.($res['error'] ?? '')];
+                header('Location: /mumble/hosts?edit='.(int)$_POST['id']); exit;
+            case 'update_agent':
+                $res = $mumble->updateHostAgent((int)$_POST['id']);
+                $_SESSION['flash'] = $res['ok']
+                    ? ['type' => 'success', 'message' => 'Agent wird auf v'.($res['data']['version'] ?? 'neueste Version').' aktualisiert (kurzer Neustart).']
+                    : ['type' => 'danger', 'message' => 'Fehler: '.($res['error'] ?? '')];
+                header('Location: /mumble/hosts'); exit;
+            case 'bulk_upgrade':
+                $res = $mumble->bulkUpgradeHost((int)$_POST['id'], (string)$_POST['image']);
+                if (!$res['ok']) {
+                    $_SESSION['flash'] = ['type' => 'danger', 'message' => 'Fehler: '.($res['error'] ?? '')];
+                } else {
+                    $msg = $res['upgraded'].' Server aktualisiert.';
+                    if (!empty($res['failed'])) $msg .= ' Fehlgeschlagen: '.implode('; ', $res['failed']);
+                    $_SESSION['flash'] = ['type' => empty($res['failed']) ? 'success' : 'warning', 'message' => $msg];
+                }
                 header('Location: /mumble/hosts'); exit;
             case 'import_servers':
                 $res = $mumble->importServersFromAgent((int)$_POST['id'], (int)Auth::id());
@@ -83,7 +108,12 @@ $mb_edit  = null;
 if ($mb_canManage && !empty($_GET['edit'])) $mb_edit = $mumble->getHost((int)$_GET['edit']);
 $mb_isNew = $mb_canManage && isset($_GET['new']);
 
-$mb_pings = [];
+// Session-Lock vor den Live-Pings freigeben, sonst blockiert ein hängender Host
+// jeden weiteren Request derselben Browser-Session (siehe ajax.php).
+if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+
+$mb_pings  = [];
+$mb_images = [];
 foreach ($mb_hosts as $h) {
     if ((int)$h['is_active'] !== 1) continue;
     $a = new \EsseMumble\MumbleAgent((string)$h['agent_url'], (string)$h['agent_token'], 3);
@@ -92,6 +122,7 @@ foreach ($mb_hosts as $h) {
     if ($r['ok']) {
         $mumble->touchHostLastSeen((int)$h['id']);
         if (!empty($r['data']['latest_image'])) $mumble->updateHostLatestImage((int)$h['id'], (string)$r['data']['latest_image']);
+        $mb_images[(int)$h['id']] = $mumble->getAvailableImages((int)$h['id']);
     }
 }
 
@@ -138,6 +169,21 @@ foreach ($mb_hosts as $h) {
                                         <span class="badge text-bg-secondary">inaktiv</span>
                                     <?php elseif ($online === true): ?>
                                         <span class="badge text-bg-success"><i class="bi bi-check-lg"></i> online</span>
+                                        <?php if (!empty($ping['version'])): ?>
+                                        <span class="badge text-bg-light border" title="mumble-agent-Version">
+                                            Agent v<?= htmlspecialchars((string)$ping['version']) ?>
+                                        </span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($ping['agent_update_available']) && !empty($ping['agent_latest_version'])): ?>
+                                        <br><span class="badge text-bg-info" title="Neue mumble-agent-Version verfügbar (nicht der Mumble-Server selbst)">
+                                            <i class="bi bi-cpu"></i> Agent-Update: v<?= htmlspecialchars((string)$ping['agent_latest_version']) ?>
+                                        </span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($ping['update_channel'])): ?>
+                                        <span class="badge text-bg-<?= $ping['update_channel'] === 'prerelease' ? 'warning' : 'secondary' ?>" title="Update-Kanal">
+                                            Kanal: <?= htmlspecialchars((string)$ping['update_channel']) ?>
+                                        </span>
+                                        <?php endif; ?>
                                         <?php if (!empty($ping['mumble_image'])): ?>
                                         <br><small class="text-muted"><?= htmlspecialchars((string)$ping['mumble_image']) ?></small>
                                         <?php endif; ?>
@@ -150,15 +196,53 @@ foreach ($mb_hosts as $h) {
                                         <span class="badge text-bg-warning">unbekannt</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="text-end text-nowrap">
-                                    <?php if (!empty($ping['update_available']) && !empty($ping['latest_image'])): ?>
-                                    <form method="post" action="/mumble/hosts" class="d-inline"
+                                <td class="text-end">
+                                    <?php $mb_hImages = $mb_images[(int)$h['id']] ?? ['ok' => false, 'images' => []]; ?>
+                                    <?php if ($mb_hImages['ok'] && !empty($mb_hImages['images'])): ?>
+                                    <form method="post" action="/mumble/hosts" class="d-flex justify-content-end align-items-center gap-1 flex-wrap mb-1"
+                                          data-confirm="ACHTUNG: Alle laufenden Server auf diesem Host werden nacheinander auf die gewählte Version aktualisiert (kurzer Neustart pro Server). Ein Downgrade auf eine ältere Version kann am Datenbankformat scheitern (z.B. 1.6.x → 1.5.x) — der Agent lehnt inkompatible Downgrades pro Server ab. Fortfahren?">
+                                        <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
+                                        <input type="hidden" name="_action" value="bulk_upgrade">
+                                        <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
+                                        <select name="image" class="form-select form-select-sm" style="width:auto;max-width:170px;">
+                                            <?php foreach ($mb_hImages['images'] as $mb_img):
+                                                $img    = $mb_img['image'];
+                                                $mb_tag = str_contains($img, ':') ? substr($img, strrpos($img, ':') + 1) : $img;
+                                            ?>
+                                            <option value="<?= htmlspecialchars($img) ?>" <?= $img === ($ping['mumble_image'] ?? '') ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($mb_tag) ?><?= $mb_img['latest'] ? ' (neueste)' : '' ?><?= $mb_img['prerelease'] ? ' ⚠pre' : '' ?>
+                                            </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button class="btn btn-sm btn-warning" title="Alle Server auf diesem Host aktualisieren">
+                                            <i class="bi bi-arrow-up-circle"></i>
+                                        </button>
+                                    </form>
+                                    <?php elseif (!empty($ping['update_available']) && !empty($ping['latest_image'])): ?>
+                                    <!-- Fallback für alte Agents ohne GET /v1/images: setzt nur das
+                                         Default-Image für künftige Server-Neuanlagen (kein Rolling-Update). -->
+                                    <form method="post" action="/mumble/hosts" class="d-inline mb-1"
                                           data-confirm="Agent-Image aktualisieren?">
                                         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                                         <input type="hidden" name="_action" value="update_image">
                                         <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
                                         <input type="hidden" name="image" value="<?= htmlspecialchars((string)$ping['latest_image'], ENT_QUOTES) ?>">
-                                        <button class="btn btn-sm btn-warning" title="Image aktualisieren"><i class="bi bi-arrow-up-circle"></i></button>
+                                        <button class="btn btn-sm btn-warning" title="Agent-Image aktualisieren (alter Agent, keine Versionsauswahl)"><i class="bi bi-arrow-up-circle"></i></button>
+                                    </form>
+                                    <?php elseif ($online === true): ?>
+                                    <small class="text-muted d-block mb-1" title="Agent unterstützt noch keine Versionsauswahl (GET /v1/images)">
+                                        <i class="bi bi-info-circle"></i> keine Versionsauswahl
+                                    </small>
+                                    <?php endif; ?>
+                                    <?php if (!empty($ping['agent_update_available']) && !empty($ping['agent_latest_version'])): ?>
+                                    <form method="post" action="/mumble/hosts" class="d-inline mb-1"
+                                          data-confirm="mumble-agent auf v<?= htmlspecialchars((string)$ping['agent_latest_version'], ENT_QUOTES) ?> aktualisieren?&#10;Betrifft nur den Agent-Prozess (kurzer Neustart, ~3-4s) — laufende Mumble-Server sind davon nicht betroffen.">
+                                        <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
+                                        <input type="hidden" name="_action" value="update_agent">
+                                        <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
+                                        <button class="btn btn-sm btn-info" title="mumble-agent auf v<?= htmlspecialchars((string)$ping['agent_latest_version'], ENT_QUOTES) ?> aktualisieren">
+                                            <i class="bi bi-cpu"></i>
+                                        </button>
                                     </form>
                                     <?php endif; ?>
                                     <a class="btn btn-sm btn-outline-info" href="/mumble/host-stats/<?= (int)$h['id'] ?>" title="Server anzeigen">
@@ -251,6 +335,32 @@ foreach ($mb_hosts as $h) {
         </div>
 
         <?php if ($mb_edit): ?>
+        <?php $mb_editPing = $mb_pings[(int)$mb_edit['id']] ?? null; $mb_curChannel = (string)($mb_editPing['update_channel'] ?? 'stable'); ?>
+        <?php if ($mb_editPing): ?>
+        <div class="card mt-4">
+            <div class="card-header"><i class="bi bi-signpost-split"></i> Update-Kanal</div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    Bestimmt, welche Versionen Agent und Plugin für dieses Host als „verfügbar" anzeigen.
+                    <strong>prerelease</strong> zeigt auch als instabil markierte Pre-Release-Versionen von
+                    mumble-voip/mumble (z.B. v1.6.x). Umstellen löst einen kurzen Neustart (~3–4s) des
+                    Agent-Prozesses auf diesem Host aus — keine spontane Änderung, sondern eine bewusste
+                    Host-Einstellung.
+                </p>
+                <form method="post" action="/mumble/hosts" class="d-flex align-items-center gap-2"
+                      data-confirm="Update-Kanal umstellen? Der Agent-Prozess auf diesem Host startet dabei kurz neu (~3–4s).">
+                    <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
+                    <input type="hidden" name="_action" value="set_channel">
+                    <input type="hidden" name="id" value="<?= (int)$mb_edit['id'] ?>">
+                    <select name="channel" class="form-select form-select-sm w-auto">
+                        <option value="stable" <?= $mb_curChannel === 'stable' ? 'selected' : '' ?>>stable</option>
+                        <option value="prerelease" <?= $mb_curChannel === 'prerelease' ? 'selected' : '' ?>>prerelease</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-warning">Umstellen</button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
         <?php $mb_hAdmins = $mumble->getHostAdminUsers((int)$mb_edit['id']); ?>
         <div class="card mt-4">
             <div class="card-header"><i class="bi bi-person-gear"></i> Host-Admins</div>

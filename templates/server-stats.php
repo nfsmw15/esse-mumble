@@ -10,9 +10,14 @@ $mb_srv = $mumble->getServer($mb_sid);
 
 if (!$mb_srv || !$mumble->canManageServer($mb_sid)) { \Esse\Router::abort(403); return; }
 
+$mb_csrf = Auth::csrfToken();
+
+// Session-Lock vor den Live-Agent-Calls freigeben (erst NACH csrfToken()), sonst
+// blockiert ein hängender Host jeden weiteren Request derselben Browser-Session.
+if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+
 $mumble->refreshStats($mb_sid);
 $mb_srv  = $mumble->getServer($mb_sid);
-$mb_csrf = Auth::csrfToken();
 $mb_hid  = (int)$mb_srv['host_id'];
 
 $mb_uptime = static function(int $secs): string {

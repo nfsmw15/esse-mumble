@@ -13,11 +13,15 @@ $mumble = new \EsseMumble\MumbleRepository();
 $srv    = $mumble->getServerByWidget($token);
 if (!$srv) { http_response_code(404); exit; }
 
-// Live-Daten
-$agent     = new \EsseMumble\MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token']);
-$dash      = $agent->getDashboard((string)$srv['container_id']);
-$agentResp = $dash['data'] ?? [];
-$data      = (($agentResp['ok'] ?? false) && isset($agentResp['data'])) ? $agentResp['data'] : [];
+// Live-Daten (nur wenn Host aktiv — sonst blockiert ein hängender Host jeden
+// Betrachter dieses öffentlich eingebetteten Banners)
+$data = [];
+if ((int)($srv['host_is_active'] ?? 1) === 1) {
+    $agent     = new \EsseMumble\MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token'], 6);
+    $dash      = $agent->getDashboard((string)$srv['container_id']);
+    $agentResp = $dash['data'] ?? [];
+    $data      = (($agentResp['ok'] ?? false) && isset($agentResp['data'])) ? $agentResp['data'] : [];
+}
 
 $online    = (int)($data['user_count'] ?? 0);
 $maxUsers  = (int)$srv['max_users'];

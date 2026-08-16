@@ -44,6 +44,14 @@ function mbVerifyCsrf(array $body): bool
 
 $action = $ajaxAction ?? 'unknown';
 
+// Session-Lock sofort freigeben: Dieser Handler schreibt nirgends in $_SESSION,
+// hält den Lock aber sonst für die komplette Laufzeit eines Agent-Requests.
+// Hängt ein Mumble-Host, blockiert das sonst JEDEN weiteren Request derselben
+// Browser-Session (Live-Polling von Viewer/Dashboard) hinter demselben Lock –
+// das hat am 2026-08-15 den kompletten PHP-FPM-Pool und damit die ganze Seite
+// lahmgelegt, obwohl nur die Mumble-Hosts betroffen waren.
+if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+
 // ── Widget-Embed (public) ──────────────────────────────────────────────────
 if ($action === 'widget_embed') {
     $mumble = new \EsseMumble\MumbleRepository();
@@ -51,7 +59,8 @@ if ($action === 'widget_embed') {
     if ($token === '') { mbJson(['ok' => false, 'error' => 'Kein Token']); }
     $srv = $mumble->getServerByWidget($token);
     if (!$srv) { mbJson(['ok' => false, 'error' => 'Widget nicht verfügbar']); }
-    $agent = new \EsseMumble\MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token']);
+    if ((int)($srv['host_is_active'] ?? 1) !== 1) { mbJson(['ok' => false, 'error' => 'Server nicht erreichbar']); }
+    $agent = new \EsseMumble\MumbleAgent((string)$srv['agent_url'], (string)$srv['agent_token'], 6);
     $res   = $agent->getViewer((string)$srv['container_id']);
     if (!$res['ok']) { mbJson(['ok' => false, 'error' => 'Server nicht erreichbar']); }
     $viewer = $res['data'];

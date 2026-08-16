@@ -10,6 +10,10 @@ $mb_host = $mumble->getHost($mb_hid);
 
 if (!$mb_host || !$mumble->canSeeHost($mb_hid)) { \Esse\Router::abort(403); return; }
 
+// Session-Lock vor den Live-Agent-Calls freigeben, sonst blockiert ein hängender
+// Host jeden weiteren Request derselben Browser-Session (siehe ajax.php).
+if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+
 $mb_live    = $mumble->getLiveHostData($mb_hid);
 $mb_isAdmin = $mumble->canAdminAll() || $mumble->isHostAdmin();
 

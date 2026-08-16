@@ -104,8 +104,18 @@ class MumbleAgent
     public function updateImage(string $image): array {
         return $this->request('POST', '/v1/image', ['image' => $image], 15);
     }
-    public function upgradeServer(string $cid): array {
-        return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/upgrade', null, 300);
+    public function upgradeServer(string $cid, ?string $image = null): array {
+        return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/upgrade',
+            $image !== null ? ['image' => $image] : null, 300);
+    }
+    public function listImages(): array {
+        return $this->request('GET', '/v1/images', null, 15);
+    }
+    public function setChannel(string $channel): array {
+        return $this->request('POST', '/v1/channel', ['channel' => $channel], 10);
+    }
+    public function updateAgent(?string $version = null): array {
+        return $this->request('POST', '/v1/agent/update', $version !== null ? ['version' => $version] : null, 30);
     }
     public function updateSettingsLive(string $cid, array $data): array {
         return $this->request('PATCH', '/v1/servers/'.rawurlencode($cid).'/live', $data, 15);
