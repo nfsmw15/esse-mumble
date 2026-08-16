@@ -37,7 +37,9 @@ $mb_log  = $mb_res['ok']
         </div>
     </div>
     <div class="card-body p-0">
-        <pre class="mb-0 p-3" style="max-height:600px;overflow:auto;background:#1e1e1e;color:#dcdcdc;font-size:13px;line-height:1.4;"><?= htmlspecialchars($mb_log) ?></pre>
+        <pre class="mb-0 p-3 mb-log-output"><?= htmlspecialchars($mb_log) ?></pre>
     </div>
 </div>
+
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <?php

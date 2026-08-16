@@ -36,7 +36,7 @@ $mb_cls = match ($mb_status) { 'running' => 'success', 'stopped' => 'secondary',
     <a href="/mumble/edit/<?= $mb_sid ?>" class="btn btn-primary">
         <i class="bi bi-gear"></i> Einstellungen
     </a>
-    <span class="badge text-bg-<?= $mb_cls ?> ms-2" style="font-size:1em;padding:6px 10px">
+    <span class="badge text-bg-<?= $mb_cls ?> ms-2 mb-badge-lg">
         <?= htmlspecialchars($mb_status) ?>
     </span>
 </div>
@@ -121,12 +121,13 @@ $mb_cls = match ($mb_status) { 'running' => 'success', 'stopped' => 'secondary',
                 <div class="card-body p-1"><canvas id="mb-chart-ping" height="100"></canvas></div>
             </div></div>
         </div>
-        <p class="text-muted small" id="mb-chart-note" style="display:none">
+        <p class="text-muted small mb-hidden" id="mb-chart-note">
             <i class="bi bi-info-circle"></i> Noch keine historischen Daten.
         </p>
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/chart.umd.min.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-edit.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-stats.js"></script>

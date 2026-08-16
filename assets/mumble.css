@@ -1,0 +1,145 @@
+/* esse-mumble – gemeinsame Styles
+ * Ersetzt Inline-style="..."-Attribute (CSP: style-src 'self', kein unsafe-inline).
+ * Copyright (C) 2026 Andreas P. <https://nfsmw15.de>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+/* Sichtbarkeit per JS umschaltbar: bewusst OHNE !important, damit das bestehende
+   Muster "element.style.display = ''" (siehe assets/mumble-*.js) weiter funktioniert
+   — Bootstraps .d-none wäre mit !important stärker als eine spätere Inline-Zuweisung. */
+.mb-hidden { display: none; }
+
+/* Positionierte Vorschlags-Panels (Host-Admin-/User-Suche) */
+.mb-suggest-panel { position: absolute; z-index: 100; width: 100%; }
+
+/* Fortschrittsbalken-Höhen */
+.mb-progress-h4  { height: 4px; }
+.mb-progress-h5  { height: 5px; }
+.mb-progress-h24 { height: 24px; }
+
+/* Log-Ausgabe (server-logs.php) */
+.mb-log-output {
+    max-height: 600px;
+    overflow: auto;
+    background: #1e1e1e;
+    color: #dcdcdc;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Größere Badges (Cron-Status, Server-Status) */
+.mb-badge-lg { font-size: 1em; padding: 6px 10px; }
+/* Host-Admin-Chip-Badge */
+.mb-badge-md { font-size: .9em; padding: 5px 8px; }
+/* Entfernen-Button in einem Chip-Badge */
+.mb-chip-remove { font-size: 11px; line-height: 1; vertical-align: middle; }
+
+/* Scrollbare Baum-/Listen-Container (Channels, ACL) */
+.mb-scroll-tree { max-height: 600px; overflow-y: auto; }
+.mb-scroll-tree--min { min-height: 200px; }
+
+/* Widget-Einstellungen: Banner-Vorschau, Farbwähler, Vorschau-Box */
+.mb-banner-preview { max-width: 100%; border-radius: 4px; }
+.mb-color-swatch { width: 36px; height: 28px; padding: 2px; border: 1px solid #ccc; }
+.mb-widget-preview {
+    border-radius: 6px;
+    min-height: 100px;
+    overflow-y: auto;
+    font-size: 13px;
+    padding: 8px;
+}
+
+/* Tabellenspalten-Breiten */
+.mb-col-40 { width: 40%; }
+.mb-col-actions { min-width: 220px; }
+
+/* Sonstige feste Größen */
+.mb-viewer-min { min-height: 60px; }
+.mb-input-narrow { width: 90px; }
+.mb-fs-75 { font-size: .75rem; }
+.mb-fs-50 { font-size: .5rem; }
+
+/* Channel-Widget (frontend/widget.php): Einrücktiefe pro Channel-/User-Zeile.
+   Deckt die üblichen Verschachtelungstiefen ab; darüber hinaus wird auf die
+   letzte Stufe geklemmt (siehe esse_render_channel()). */
+.mb-depth-0  { padding-left: 0; }
+.mb-depth-1  { padding-left: 14px; }
+.mb-depth-2  { padding-left: 28px; }
+.mb-depth-3  { padding-left: 42px; }
+.mb-depth-4  { padding-left: 56px; }
+.mb-depth-5  { padding-left: 70px; }
+.mb-depth-6  { padding-left: 84px; }
+.mb-depth-7  { padding-left: 98px; }
+.mb-depth-8  { padding-left: 112px; }
+.mb-depth-9  { padding-left: 126px; }
+.mb-depth-10 { padding-left: 140px; }
+.mb-user-depth-0  { padding-left: 16px; }
+.mb-user-depth-1  { padding-left: 30px; }
+.mb-user-depth-2  { padding-left: 44px; }
+.mb-user-depth-3  { padding-left: 58px; }
+.mb-user-depth-4  { padding-left: 72px; }
+.mb-user-depth-5  { padding-left: 86px; }
+.mb-user-depth-6  { padding-left: 100px; }
+.mb-user-depth-7  { padding-left: 114px; }
+.mb-user-depth-8  { padding-left: 128px; }
+.mb-user-depth-9  { padding-left: 142px; }
+.mb-user-depth-10 { padding-left: 156px; }
+
+/* Fortschrittsbalken-Breite in 5%-Schritten (Quota-/Auslastungsanzeigen, die nur
+   beim Server-Render einmalig gesetzt werden, nicht per JS aktualisiert). */
+.mb-w-0   { width: 0%; }
+.mb-w-5   { width: 5%; }
+.mb-w-10  { width: 10%; }
+.mb-w-15  { width: 15%; }
+.mb-w-20  { width: 20%; }
+.mb-w-25  { width: 25%; }
+.mb-w-30  { width: 30%; }
+.mb-w-35  { width: 35%; }
+.mb-w-40  { width: 40%; }
+.mb-w-45  { width: 45%; }
+.mb-w-50  { width: 50%; }
+.mb-w-55  { width: 55%; }
+.mb-w-60  { width: 60%; }
+.mb-w-65  { width: 65%; }
+.mb-w-70  { width: 70%; }
+.mb-w-75  { width: 75%; }
+.mb-w-80  { width: 80%; }
+.mb-w-85  { width: 85%; }
+.mb-w-90  { width: 90%; }
+.mb-w-95  { width: 95%; }
+.mb-w-100 { width: 100%; }
+
+/* ── frontend/widget.php: öffentliches Channel-Viewer-Widget ──────────────── */
+.mb-widget-404 {
+    margin: 0; font-family: sans-serif; background: #1a1a2e; color: #e0e0e0;
+    display: flex; align-items: center; justify-content: center; height: 100vh;
+    font-size: 14px;
+}
+.mb-widget-body * { box-sizing: border-box; margin: 0; padding: 0; }
+.mb-widget-body {
+    font-family: 'Segoe UI', sans-serif; font-size: 13px; background: #1e1e2e;
+    color: #cdd6f4; padding: 8px; min-height: 100vh;
+}
+.mb-widget-body .header {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    background: #313244; border-radius: 6px; margin-bottom: 8px;
+}
+.mb-widget-body .header .srv-name { font-weight: 600; font-size: 14px; flex: 1; }
+.mb-widget-body .header .srv-name a { color: inherit; text-decoration: none; }
+.mb-widget-body .header .srv-name a:hover { text-decoration: underline; }
+.mb-widget-body .header .online {
+    font-size: 11px; background: #a6e3a1; color: #1e1e2e; border-radius: 10px;
+    padding: 2px 7px; font-weight: 600;
+}
+.mb-widget-body .channel {
+    display: flex; align-items: center; gap: 5px; padding: 3px 4px;
+    border-radius: 4px; font-weight: 600; color: #89b4fa; margin-top: 2px;
+}
+.mb-widget-body .user {
+    display: flex; align-items: center; gap: 5px; padding: 2px 4px;
+    border-radius: 4px; color: #cdd6f4; font-weight: 400;
+}
+.mb-widget-body .user:hover, .mb-widget-body .channel:hover { background: #313244; }
+.mb-widget-body .ch-icon, .mb-widget-body .u-icon { font-size: 12px; flex-shrink: 0; }
+.mb-widget-body .offline { text-align: center; padding: 20px; color: #585b70; }
+.mb-widget-body .footer { margin-top: 8px; font-size: 10px; color: #585b70; text-align: right; }

@@ -137,9 +137,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="card-body">
                 <?php if (!$mb_isAdmin && !$mb_isHostAdm): ?>
                 <p class="mb-1"><strong>Eigene Server:</strong></p>
-                <?php $cap = (int)$mb_quota['max_servers']; $pct = $cap > 0 ? min(100, (int)round($mb_owned / $cap * 100)) : 0; ?>
-                <div class="progress mb-3" style="height:24px;">
-                    <div class="progress-bar bg-info" role="progressbar" style="width:<?= $pct ?>%;">
+                <?php
+                $cap    = (int)$mb_quota['max_servers'];
+                $pct    = $cap > 0 ? min(100, (int)round($mb_owned / $cap * 100)) : 0;
+                $pctCls = 'mb-w-'.max(0, min(100, (int)round($pct / 5) * 5));
+                ?>
+                <div class="progress mb-3 mb-progress-h24">
+                    <div class="progress-bar bg-info <?= $pctCls ?>" role="progressbar">
                         <?= $mb_owned ?> / <?= $cap ?>
                     </div>
                 </div>
@@ -152,4 +156,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </div>
+
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <?php

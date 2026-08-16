@@ -35,7 +35,7 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
                     <i class="bi bi-plus-lg"></i>
                 </button>
             </div>
-            <div class="card-body p-2" id="mb-channel-tree" style="min-height:200px;max-height:600px;overflow-y:auto">
+            <div class="card-body p-2 mb-scroll-tree mb-scroll-tree--min" id="mb-channel-tree">
                 <div class="text-muted small p-2"><i class="bi bi-hourglass-split"></i> Lade…</div>
             </div>
         </div>
@@ -48,7 +48,7 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
             oder <a href="#" id="mb-add-root-link"><i class="bi bi-plus-lg"></i> Root-Channel erstellen</a>.
         </div>
 
-        <div id="mb-edit-panel" style="display:none">
+        <div id="mb-edit-panel" class="mb-hidden">
             <div class="card">
                 <div class="card-header py-2"><strong id="mb-edit-title">Channel bearbeiten</strong></div>
                 <div class="card-body">
@@ -77,7 +77,7 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
             </div>
         </div>
 
-        <div id="mb-new-root-panel" style="display:none" class="card">
+        <div id="mb-new-root-panel" class="card mb-hidden">
             <div class="card-header py-2"><i class="bi bi-plus-lg"></i> Root-Channel erstellen</div>
             <div class="card-body">
                 <div class="input-group input-group-sm">
@@ -90,5 +90,6 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-channels.js"></script>
 <?php

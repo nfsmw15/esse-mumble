@@ -139,7 +139,7 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
         <div class="card mb-4">
             <div class="card-header"><i class="bi bi-image"></i> Server-Banner</div>
             <div class="card-body text-center">
-                <img src="<?= htmlspecialchars($mb_banner_url) ?>" alt="Server-Banner" style="max-width:100%;border-radius:4px;">
+                <img src="<?= htmlspecialchars($mb_banner_url) ?>" alt="Server-Banner" class="mb-banner-preview">
             </div>
         </div>
 
@@ -155,9 +155,9 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
                                 <input type="checkbox" class="form-check-input wc-opt" id="wc-bg-enabled">
                                 <label class="form-check-label small" for="wc-bg-enabled">Hintergrund</label>
                             </div>
-                            <div id="wc-bg-options" style="display:none">
+                            <div id="wc-bg-options" class="mb-hidden">
                                 <div class="d-flex align-items-center mb-1">
-                                    <input type="color" id="wc-bg" value="#000000" class="wc-opt me-2" style="width:36px;height:28px;padding:2px;border:1px solid #ccc;">
+                                    <input type="color" id="wc-bg" value="#000000" class="wc-opt me-2 mb-color-swatch">
                                     <input type="text" id="wc-bg-text" value="#000000" class="form-control form-control-sm wc-text" maxlength="7">
                                 </div>
                                 <div class="form-check">
@@ -170,7 +170,7 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
                         <div class="mb-2">
                             <label class="form-label small mb-0"><?= $lbl ?></label>
                             <div class="d-flex align-items-center">
-                                <input type="color" id="<?= $id ?>" value="<?= $val ?>" class="wc-opt me-2" style="width:36px;height:28px;padding:2px;border:1px solid #ccc;">
+                                <input type="color" id="<?= $id ?>" value="<?= $val ?>" class="wc-opt me-2 mb-color-swatch">
                                 <input type="text" id="<?= $id ?>-text" value="<?= $val ?>" class="form-control form-control-sm wc-text" maxlength="7">
                             </div>
                         </div>
@@ -180,7 +180,7 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
                                 <input type="checkbox" class="form-check-input wc-opt" id="wc-width-enabled">
                                 <label class="form-check-label small" for="wc-width-enabled">Breite festlegen</label>
                             </div>
-                            <div id="wc-width-options" style="display:none">
+                            <div id="wc-width-options" class="mb-hidden">
                                 <div class="input-group input-group-sm">
                                     <input type="number" id="wc-width-val" value="100" min="10" max="100" class="form-control wc-opt">
                                     <span class="input-group-text">%</span>
@@ -192,7 +192,7 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
                                 <input type="checkbox" class="form-check-input wc-opt" id="wc-height-enabled">
                                 <label class="form-check-label small" for="wc-height-enabled">Feste Höhe</label>
                             </div>
-                            <div id="wc-height-options" style="display:none">
+                            <div id="wc-height-options" class="mb-hidden">
                                 <div class="input-group input-group-sm">
                                     <input type="number" id="wc-height-val" value="400" min="50" max="2000" class="form-control wc-opt">
                                     <span class="input-group-text">px</span>
@@ -222,7 +222,7 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
 
                     <div class="col-md-7">
                         <label class="form-label small mb-1">Vorschau</label>
-                        <div id="wc-preview" style="border-radius:6px;min-height:100px;overflow-y:auto;font-size:13px;padding:8px">
+                        <div id="wc-preview" class="mb-widget-preview">
                             <span class="text-muted small"><i class="bi bi-hourglass-split"></i> Lade…</span>
                         </div>
                         <label class="form-label small mb-1 mt-2">Generierter Code</label>
@@ -245,5 +245,6 @@ $mb_banner_url    = $mb_widget_iframe !== '' ? $mb_widget_base.'/mumble/banner?t
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-edit.js"></script>
 <?php

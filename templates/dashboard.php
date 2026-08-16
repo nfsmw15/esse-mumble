@@ -52,7 +52,7 @@ $mb_showHosts = $mb_isAdmin || $mb_isHostAdm;
     </div>
 
     <!-- Online-Nutzer-Tabelle -->
-    <div class="mt-4" id="db-users-wrap" style="display:none">
+    <div class="mt-4 mb-hidden" id="db-users-wrap">
         <h5 class="mb-3"><i class="bi bi-headphones"></i> Online-Nutzer</h5>
         <div class="table-responsive">
             <table class="table table-sm table-bordered table-hover">
@@ -87,7 +87,7 @@ $mb_showHosts = $mb_isAdmin || $mb_isHostAdm;
             <div class="col-md-6 mb-4"><div class="card"><div class="card-header py-2 small"><i class="bi bi-clock"></i> Ping Ø (ms)</div>
             <div class="card-body p-2"><canvas id="chart-ping" height="140"></canvas></div></div></div>
         </div>
-        <p class="text-muted small" id="db-chart-note" style="display:none">
+        <p class="text-muted small mb-hidden" id="db-chart-note">
             <i class="bi bi-info-circle"></i> Noch keine historischen Daten.
         </p>
     </div>
@@ -139,6 +139,7 @@ $mb_users_total = array_sum(array_column($mb_my_servers, 'stats_online'));
             'running' => 'success', 'stopped' => 'secondary', 'error' => 'danger', 'creating' => 'warning', default => 'info',
         };
         $userPct = $srv['max_users'] > 0 ? min(100, round(($srv['stats_online'] / $srv['max_users']) * 100)) : 0;
+        $userPctCls = 'mb-w-'.max(0, min(100, (int)round($userPct / 5) * 5));
     ?>
     <div class="col-md-4 col-sm-6 mb-4">
         <div class="card h-100">
@@ -155,9 +156,8 @@ $mb_users_total = array_sum(array_column($mb_my_servers, 'stats_online'));
                     <small class="text-muted">Nutzer</small>
                     <small><?= (int)$srv['stats_online'] ?> / <?= (int)$srv['max_users'] ?></small>
                 </div>
-                <div class="progress mb-2" style="height:5px">
-                    <div class="progress-bar <?= $userPct >= 90 ? 'bg-danger' : ($userPct >= 70 ? 'bg-warning' : 'bg-success') ?>"
-                         style="width:<?= $userPct ?>%"></div>
+                <div class="progress mb-2 mb-progress-h5">
+                    <div class="progress-bar <?= $userPct >= 90 ? 'bg-danger' : ($userPct >= 70 ? 'bg-warning' : 'bg-success') ?> <?= $userPctCls ?>"></div>
                 </div>
             </div>
             <div class="card-footer">
@@ -190,7 +190,7 @@ $mb_users_total = array_sum(array_column($mb_my_servers, 'stats_online'));
             <div class="col-md-6 mb-4"><div class="card"><div class="card-header py-2 small"><i class="bi bi-speedometer2"></i> Bandbreite (B/s)</div>
             <div class="card-body p-2"><canvas id="chart-bw" height="140"></canvas></div></div></div>
         </div>
-        <p class="text-muted small" id="db-chart-note" style="display:none">
+        <p class="text-muted small mb-hidden" id="db-chart-note">
             <i class="bi bi-info-circle"></i> Noch keine historischen Daten.
         </p>
     </div>
@@ -198,6 +198,7 @@ $mb_users_total = array_sum(array_column($mb_my_servers, 'stats_online'));
 <?php endif; ?>
 <?php endif; ?>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/chart.umd.min.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-dashboard.js"></script>
 <?php

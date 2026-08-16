@@ -72,6 +72,7 @@ $mb_uptime = static function(int $secs): string {
         $uCount  = (int)($live['user_count'] ?? $srv['stats_online']);
         $maxU    = (int)$srv['max_users'];
         $pct     = $maxU > 0 ? min(100, round($uCount / $maxU * 100)) : 0;
+        $pctCls  = 'mb-w-'.max(0, min(100, (int)round($pct / 5) * 5));
         $barCls  = $pct >= 90 ? 'bg-danger' : ($pct >= 70 ? 'bg-warning' : 'bg-success');
     ?>
     <div class="col-md-4 col-sm-6 mb-3">
@@ -93,8 +94,8 @@ $mb_uptime = static function(int $secs): string {
                     <small class="text-muted">Nutzer</small>
                     <small><?= $uCount ?> / <?= $maxU ?></small>
                 </div>
-                <div class="progress mb-2" style="height:4px">
-                    <div class="progress-bar <?= $barCls ?>" style="width:<?= $pct ?>%"></div>
+                <div class="progress mb-2 mb-progress-h4">
+                    <div class="progress-bar <?= $barCls ?> <?= $pctCls ?>"></div>
                 </div>
                 <?php if ($running && !empty($live)): ?>
                 <div class="d-flex justify-content-between mb-1">
@@ -151,10 +152,11 @@ $mb_uptime = static function(int $secs): string {
         <div class="card-body p-2"><canvas id="mb-chart-ping" height="120"></canvas></div>
     </div></div>
 </div>
-<p class="text-muted small" id="mb-chart-note" style="display:none">
+<p class="text-muted small mb-hidden" id="mb-chart-note">
     <i class="bi bi-info-circle"></i> Noch keine historischen Daten vorhanden.
 </p>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/chart.umd.min.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-stats.js"></script>
 <?php

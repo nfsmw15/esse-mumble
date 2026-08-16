@@ -80,7 +80,7 @@ $hosts        = DB::fetchAll("SELECT id, name FROM `{$th}` ORDER BY name ASC", [
 $csrf = Auth::csrfToken();
 
 $pageTitle = 'Mumble Host-Admins';
-$activeNav = 'mumble-permissions';
+$activeNav = 'admin/mumble-permissions';
 
 ob_start();
 ?>
@@ -120,10 +120,9 @@ ob_start();
                 <div class="list-group-item" data-hid="<?= (int)$host['id'] ?>">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <strong class="small"><?= htmlspecialchars((string)$host['name']) ?></strong>
-                        <button class="btn btn-xs btn-outline-primary py-0 px-1 btn-add-host-admin"
+                        <button class="btn btn-xs btn-outline-primary py-0 px-1 btn-add-host-admin mb-fs-75"
                                 data-hid="<?= (int)$host['id'] ?>"
-                                data-hname="<?= htmlspecialchars((string)$host['name']) ?>"
-                                style="font-size:.75rem">
+                                data-hname="<?= htmlspecialchars((string)$host['name']) ?>">
                             <i class="bi bi-plus-lg"></i>
                         </button>
                     </div>
@@ -135,8 +134,7 @@ ob_start();
                               data-uid="<?= (int)$adm['user_id'] ?>">
                             <?= htmlspecialchars($adm['display_name']) ?>
                             <button type="button"
-                                class="btn-close btn-close-white btn-remove-host-admin"
-                                style="font-size:.5rem"
+                                class="btn-close btn-close-white btn-remove-host-admin mb-fs-50"
                                 data-hid="<?= (int)$host['id'] ?>"
                                 data-uid="<?= (int)$adm['user_id'] ?>"></button>
                         </span>
@@ -169,6 +167,7 @@ ob_start();
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-permissions.js"></script>
 
 <?php

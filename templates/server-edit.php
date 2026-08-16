@@ -151,7 +151,7 @@ $mb_widget_iframe = $mb_widget_token !== ''
                 <table class="table table-sm mb-0">
                     <tbody>
                         <tr>
-                            <th style="width:40%">Adresse</th>
+                            <th class="mb-col-40">Adresse</th>
                             <td>
                                 <code><?= htmlspecialchars((string)$mb_srv['hostname']) ?>:<?= (int)$mb_srv['port'] ?></code>
                                 <a class="btn btn-link btn-sm py-0"
@@ -244,7 +244,7 @@ $mb_widget_iframe = $mb_widget_token !== ''
                 </button>
             </div>
             <div class="card-body p-0">
-                <div id="mb-viewer-content" style="min-height:60px;"
+                <div id="mb-viewer-content" class="mb-viewer-min"
                      data-viewer-url="/mumble/api/viewer?id=<?= (int)$mb_srv['id'] ?>"
                      data-kick-url="/mumble/api/kick?id=<?= (int)$mb_srv['id'] ?>"
                      data-mute-url="/mumble/api/update-user?id=<?= (int)$mb_srv['id'] ?>"
@@ -419,8 +419,7 @@ $mb_widget_iframe = $mb_widget_token !== ''
                             <i class="bi bi-plus-lg"></i> Hinzufügen
                         </button>
                     </div>
-                    <div id="mb-member-suggestions" class="list-group mt-1"
-                         style="position:absolute;z-index:100;width:100%;display:none;"></div>
+                    <div id="mb-member-suggestions" class="list-group mt-1 mb-suggest-panel mb-hidden"></div>
                 </div>
                 <form method="post" id="mb-member-add-form" action="/mumble/edit/<?= $mb_sid ?>">
                     <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
@@ -476,11 +475,12 @@ $mb_widget_iframe = $mb_widget_token !== ''
             <div class="card-body p-2"><canvas id="mb-chart-ping" height="120"></canvas></div></div>
         </div>
     </div>
-    <p class="text-muted small" id="mb-chart-note" style="display:none">
+    <p class="text-muted small mb-hidden" id="mb-chart-note">
         <i class="bi bi-info-circle"></i> Noch keine historischen Daten vorhanden.
     </p>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-confirm.js"></script>
 <script src="/plugins/esse-mumble/assets/chart.umd.min.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-edit.js"></script>

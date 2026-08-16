@@ -23,7 +23,7 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
     <div class="col-md-3">
         <div class="card mb-3">
             <div class="card-header py-2"><i class="bi bi-diagram-3"></i> Channels</div>
-            <div class="card-body p-2" id="mb-channel-tree" style="max-height:600px;overflow-y:auto">
+            <div class="card-body p-2 mb-scroll-tree" id="mb-channel-tree">
                 <div class="text-muted small p-2"><i class="bi bi-hourglass-split"></i> Lade...</div>
             </div>
         </div>
@@ -34,7 +34,7 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
             <i class="bi bi-arrow-left"></i>&nbsp; Channel im Baum auswählen um dessen ACL zu bearbeiten.
         </div>
 
-        <div id="mb-acl-editor" style="display:none">
+        <div id="mb-acl-editor" class="mb-hidden">
             <div class="card">
                 <div class="card-header py-2 d-flex justify-content-between align-items-center">
                     <strong><i class="bi bi-lock-fill"></i> ACL: <span id="mb-channel-name">-</span></strong>
@@ -95,5 +95,6 @@ $mb_name = htmlspecialchars((string)$mb_srv['name']);
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-acl.js"></script>
 <?php

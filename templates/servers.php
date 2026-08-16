@@ -90,8 +90,9 @@ $mb_statusIcon = static fn(string $s): string => match ($s) {
                         <th>Host</th>
                         <th>Adresse</th>
                         <th>Status</th>
+                        <th>Version</th>
                         <th>Online</th>
-                        <th class="text-end" style="min-width:220px;">Aktionen</th>
+                        <th class="text-end mb-col-actions">Aktionen</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -118,6 +119,14 @@ $mb_statusIcon = static fn(string $s): string => match ($s) {
                             <span class="badge text-bg-<?= $cls ?>">
                                 <i class="bi <?= $ico ?>"></i> <?= htmlspecialchars($status) ?>
                             </span>
+                        </td>
+                        <td>
+                            <?php $mb_img = (string)($s['pinned_image'] ?? ''); ?>
+                            <?php if ($mb_img !== ''): ?>
+                            <code class="small"><?= htmlspecialchars(str_contains($mb_img, ':') ? substr($mb_img, strrpos($mb_img, ':') + 1) : $mb_img) ?></code>
+                            <?php else: ?>
+                            <small class="text-muted">unbekannt</small>
+                            <?php endif; ?>
                         </td>
                         <td class="js-online">
                             <span class="js-online-num"><?= (int)$s['stats_online'] ?></span>
@@ -169,6 +178,7 @@ $mb_statusIcon = static fn(string $s): string => match ($s) {
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-confirm.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-servers.js"></script>
 <?php

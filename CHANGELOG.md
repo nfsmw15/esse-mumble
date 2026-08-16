@@ -45,8 +45,20 @@ Erste Veröffentlichung als esse-cms Plugin.
   falls für den Agent-Prozess selbst (Self-Updater ab Agent v2.15.0) eine neuere
   Version verfügbar ist — betrifft nur die Verwaltungs-API, nie die laufenden
   Mumble-Server-Container.
+- Server-Verwaltungsliste (`/mumble/servers`) zeigt jetzt eine „Version"-Spalte mit
+  der zuletzt bekannten laufenden Mumble-Version je Server — ohne zusätzliche
+  Live-Agent-Aufrufe in der Liste selbst, der Wert wird bei jedem Besuch der
+  Server-Detailseite automatisch aktualisiert.
 
 ### Stabilität
+- CSP-Konformität: Sämtliche Inline-`style="..."`-Attribute sowie ein Inline-
+  `<style>`-Block im öffentlichen Widget wurden entfernt und durch eine gemeinsame
+  `assets/mumble.css` sowie klassenbasierte Werte ersetzt (dynamische Prozent-
+  Balken auf 5%-Schritt-Klassen gerundet, Channel-Einrücktiefen auf Klassenstufen
+  0–10 geklemmt). Die esse-cms-CSP (`style-src 'self'`, kein `unsafe-inline`)
+  blockiert Inline-Styles auch als HTML-Attribut, nicht nur als `<style>`-Block —
+  betroffene Panels (z.B. Host-Admin-Suche, Channel-/ACL-Editor) hätten sonst
+  potenziell offen statt versteckt starten können, bis JS sie einklappt.
 - Selbstheilung bei veralteter Container-ID: Ging z.B. die Antwort eines Upgrades
   verloren (etwa weil der Agent währenddessen neu startete), kannte die DB nur noch
   die alte, nicht mehr existierende Container-ID — jede weitere Aktion lief dann mit

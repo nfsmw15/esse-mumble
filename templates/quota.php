@@ -61,12 +61,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <td><strong><?= htmlspecialchars((string)$r['name']) ?></strong>
                                 <small class="text-muted"><?= htmlspecialchars($role) ?></small></td>
                             <td>
-                                <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                <input type="number" class="form-control form-control-sm mb-input-narrow"
                                        name="q[<?= htmlspecialchars($role) ?>][max_servers]"
                                        min="0" max="999" value="<?= (int)$q['max_servers'] ?>">
                             </td>
                             <td>
-                                <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                <input type="number" class="form-control form-control-sm mb-input-narrow"
                                        name="q[<?= htmlspecialchars($role) ?>][max_users_cap]"
                                        min="1" max="500" value="<?= (int)$q['max_users_cap'] ?>">
                             </td>
@@ -94,4 +94,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     Admins (Rolle "admin" und höher) haben keine Quota-Beschränkung und können immer Server anlegen.
     Host-Admins können ebenfalls unbegrenzt Server auf ihren zugewiesenen Hosts anlegen.
 </div>
+
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <?php

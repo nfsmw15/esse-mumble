@@ -204,7 +204,7 @@ foreach ($mb_hosts as $h) {
                                         <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                                         <input type="hidden" name="_action" value="bulk_upgrade">
                                         <input type="hidden" name="id" value="<?= (int)$h['id'] ?>">
-                                        <select name="image" class="form-select form-select-sm" style="width:auto;max-width:170px;">
+                                        <select name="image" class="form-select form-select-sm w-auto">
                                             <?php foreach ($mb_hImages['images'] as $mb_img):
                                                 $img    = $mb_img['image'];
                                                 $mb_tag = str_contains($img, ':') ? substr($img, strrpos($img, ':') + 1) : $img;
@@ -368,14 +368,14 @@ foreach ($mb_hosts as $h) {
                 <?php if ($mb_hAdmins): ?>
                 <div class="mb-3">
                     <?php foreach ($mb_hAdmins as $ha): ?>
-                    <span class="badge text-bg-info me-1 mb-1" style="font-size:0.9em;padding:5px 8px">
+                    <span class="badge text-bg-info me-1 mb-1 mb-badge-md">
                         <?= htmlspecialchars((string)$ha['display_name']) ?>
                         <form method="post" action="/mumble/hosts" class="d-inline">
                             <input type="hidden" name="_csrf" value="<?= htmlspecialchars($mb_csrf) ?>">
                             <input type="hidden" name="_action" value="host_admin_remove">
                             <input type="hidden" name="host_id" value="<?= (int)$mb_edit['id'] ?>">
                             <input type="hidden" name="user_id" value="<?= (int)$ha['id'] ?>">
-                            <button type="submit" class="btn btn-link p-0 ms-1 text-white" style="font-size:11px;line-height:1;vertical-align:middle" title="Entfernen">&times;</button>
+                            <button type="submit" class="btn btn-link p-0 ms-1 text-white mb-chip-remove" title="Entfernen">&times;</button>
                         </form>
                     </span>
                     <?php endforeach; ?>
@@ -398,7 +398,7 @@ foreach ($mb_hosts as $h) {
                                 <i class="bi bi-plus-lg"></i> Hinzufügen
                             </button>
                         </div>
-                        <div id="ha-suggestions" class="list-group mt-1" style="position:absolute;z-index:100;width:100%;display:none;"></div>
+                        <div id="ha-suggestions" class="list-group mt-1 mb-suggest-panel mb-hidden"></div>
                     </div>
                 </form>
             </div>
@@ -420,7 +420,7 @@ foreach ($mb_hosts as $h) {
             <div class="card-header"><i class="bi bi-clock"></i> Statistik-Cron</div>
             <div class="card-body">
                 <div class="d-flex align-items-center mb-3">
-                    <span class="badge text-bg-<?= $mb_cron_cls ?> me-2" style="font-size:1em;padding:6px 10px">
+                    <span class="badge text-bg-<?= $mb_cron_cls ?> me-2 mb-badge-lg">
                         <?= $mb_cron_cls === 'success' ? '✓' : ($mb_cron_cls === 'warning' ? '⚠' : '✗') ?>
                     </span>
                     <div>
@@ -460,6 +460,7 @@ foreach ($mb_hosts as $h) {
     </div>
 </div>
 
+<link rel="stylesheet" href="/plugins/esse-mumble/assets/mumble.css">
 <script src="/plugins/esse-mumble/assets/mumble-confirm.js"></script>
 <script src="/plugins/esse-mumble/assets/mumble-hosts.js"></script>
 <?php

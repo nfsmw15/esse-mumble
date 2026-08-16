@@ -19,8 +19,10 @@ Widgets bzw. Banner.
 
 - esse-cms >= 0.1.0
 - PHP 8.1+
-- MySQL 5.7+ / MariaDB 10.3+
-- [mumble-agent](https://github.com/nfsmw15/mumble-agent) auf jedem Mumble-Host
+- MySQL 8.0.29+ / MariaDB 10.3+ (Migration nutzt `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`)
+- [mumble-agent](https://github.com/nfsmw15/mumble-agent) auf jedem Mumble-Host — ältere
+  Agent-Versionen funktionieren weiterhin, zeigen aber keine Versionsauswahl/Update-Kanal/
+  Agent-Self-Update an (siehe Features)
 
 ## Installation
 
@@ -84,6 +86,14 @@ Zuordnung von Host-Admins zu einzelnen Hosts.
 - Öffentliches Widget und Banner (PNG) per Token einbettbar
 - Server-Import aus bestehendem Agent-Bestand
 - Audit-Log aller Aktionen
+- Versionsauswahl beim Server-Upgrade (Dropdown statt Blind-Update, inkl. gezieltem
+  Downgrade) und „Alle Server aktualisieren" für ein Rolling-Update aller Server
+  eines Hosts auf einmal
+- Kennzeichnung von Pre-Release-Versionen (laut GitHub-Releases von mumble-voip/mumble)
+  sowie eine Host-Einstellung „Update-Kanal" (stable/prerelease), die steuert, welche
+  Versionen überhaupt zur Auswahl stehen
+- Agent-Self-Update direkt aus dem Plugin heraus (getrennt vom Mumble-Server-Update)
+- Selbstheilung bei veralteter Container-ID nach einem unterbrochenen Upgrade
 
 ## Konfiguration
 

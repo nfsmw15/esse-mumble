@@ -976,6 +976,12 @@ class MumbleRepository
             if (in_array($srv['status'], ['creating', 'error'], true)) {
                 $this->setStatus($serverId, 'running');
             }
+            // Zuletzt bekannte laufende Version für die Serverliste festhalten (kein
+            // Live-Call dort nötig) — hält sich bei jedem Besuch der Server-Seite aktuell.
+            $mb_curImage = (string)($res['data']['image'] ?? '');
+            if ($mb_curImage !== '' && $mb_curImage !== (string)($srv['pinned_image'] ?? '')) {
+                $this->setPinnedImage($serverId, $mb_curImage);
+            }
         } elseif ($srv['status'] === 'running') {
             // Host nicht erreichbar — Status widerspiegeln statt "running" stehen zu lassen.
             $this->setStatus($serverId, 'error');
